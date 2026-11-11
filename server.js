@@ -4,7 +4,7 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose(); 
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -57,14 +57,14 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
 
             // Seed Dati Iniziali
             db.get("SELECT COUNT(*) AS count FROM Impostazioni", (err, row) => {
-                if (row.count === 0) {
+                if (row && row.count === 0) {
                     db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('nome_business', 'Pannello Operativo')");
                     db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('emoji_business', '🍔🛵')");
                 }
             });
 
             db.get("SELECT COUNT(*) AS count FROM Reparti", (err, row) => {
-                if (row.count === 0) {
+                if (row && row.count === 0) {
                     const insertR = db.prepare("INSERT INTO Reparti (nome, richiede_veicolo) VALUES (?, ?)");
                     insertR.run("Delivery", 1);
                     insertR.run("Sala", 0);
@@ -76,7 +76,7 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
             });
 
             db.get("SELECT COUNT(*) AS count FROM Utenti", (err, row) => {
-                if (row.count === 0) {
+                if (row && row.count === 0) {
                     const insertU = db.prepare("INSERT INTO Utenti (nome, ruolo, reparto, password) VALUES (?, ?, ?, ?)");
                     insertU.run("Titolare", "manager", "Tutti", "admin123");
                     insertU.run("Marco", "staff", "Delivery", "staff123");
@@ -86,7 +86,7 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
             });
 
             db.get("SELECT COUNT(*) AS count FROM Veicoli", (err, row) => {
-                if (row.count === 0) {
+                if (row && row.count === 0) {
                     const insertV = db.prepare("INSERT INTO Veicoli (nome, tipo) VALUES (?, ?)");
                     insertV.run("Panda Rossa", "Auto");
                     insertV.run("Scooter 1", "Moto");
@@ -98,16 +98,30 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
     }
 });
 
-// --- API STATISTICHE (NUOVA) ---
-app.get('/api/statistiche', (req, res) => {
+// Funzione ausiliaria per aggiungere N settimane mantenendo il formato YYYY-MM-DD
+function calcolaDataFutura(dateStr, numSettimane) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    d.setDate(d.getDate() + (numSettimane * 7));
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+// --- API STATISTICHE MENSILI ---
+app.get('/api/statistiche/mensili', (req, res) => {
+    const mese = req.query.mese; // Formato YYYY-MM
+    if (!mese) return res.status(400).json({ error: "Seleziona un mese valido" });
+
     const query = `
         SELECT Utenti.id, Utenti.nome, Utenti.reparto, COUNT(Turni.id) AS totale_turni
         FROM Utenti
-        LEFT JOIN Turni ON Utenti.id = Turni.utente_id
+        LEFT JOIN Turni ON Utenti.id = Turni.utente_id AND strftime('%Y-%m', Turni.giorno) = ?
         WHERE Utenti.ruolo != 'manager'
         GROUP BY Utenti.id
     `;
-    db.all(query, [], (err, rows) => {
+    db.all(query, [mese], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -206,13 +220,23 @@ app.delete('/api/veicoli/:id', (req, res) => {
     });
 });
 
-// --- API TURNI ---
+// --- API TURNI (CON SUPPORTO TURNI RICORRENTI) ---
 app.post('/api/turni', (req, res) => {
-    const { giorno, orario, utente_id, reparto, veicolo_id } = req.body;
+    const { giorno, orario, utente_id, reparto, veicolo_id, settimane } = req.body;
+    const numSettimane = Math.max(1, parseInt(settimane) || 1);
+    
     const query = `INSERT INTO Turni (giorno, orario, utente_id, reparto, veicolo_id, stato) VALUES (?, ?, ?, ?, ?, 'assegnato')`;
-    db.run(query, [giorno, orario, utente_id, reparto, veicolo_id || null], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID });
+    
+    db.serialize(() => {
+        const stmt = db.prepare(query);
+        for (let i = 0; i < numSettimane; i++) {
+            const dataTurno = calcolaDataFutura(giorno, i);
+            stmt.run([dataTurno, orario, utente_id, reparto, veicolo_id || null]);
+        }
+        stmt.finalize((err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: `${numSettimane} turni salvati con successo!` });
+        });
     });
 });
 
@@ -226,6 +250,7 @@ app.get('/api/turni', (req, res) => {
         JOIN Utenti AS Proprietario ON Turni.utente_id = Proprietario.id
         LEFT JOIN Utenti AS Sostituto ON Turni.sostituto_id = Sostituto.id
         LEFT JOIN Veicoli ON Turni.veicolo_id = Veicoli.id
+        ORDER BY Turni.giorno ASC
     `;
     db.all(query, [], (err, rows) => res.json(rows));
 });
@@ -251,5 +276,5 @@ app.put('/api/turni/:id/approva', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server acceso all'indirizzo: http://localhost:${PORT}`);
+    console.log(`🚀 Server acceso sulla porta ${PORT}`);
 });

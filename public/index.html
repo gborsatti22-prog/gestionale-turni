@@ -32,12 +32,13 @@
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
             
-            <!-- CREA TURNO -->
+            <!-- CREA TURNO (CON RICORRENZA) -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <h3 class="text-xl font-bold mb-4">👑 Assegna un nuovo turno</h3>
                 <form id="form-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
+                    
                     <select id="selettore-dipendente" onchange="controllaReparto()" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">-- Scegli dipendente --</option>
                     </select>
@@ -45,21 +46,37 @@
                     <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400">
                         <option value="">-- Nessun Veicolo --</option>
                     </select>
+
+                    <!-- SELETTORE RICORRENZA -->
+                    <select id="settimane-ricorrenza" class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50 border-blue-300 font-semibold text-blue-900">
+                        <option value="1">Singolo Turno</option>
+                        <option value="2">🔄 Ripeti per 2 settimane</option>
+                        <option value="4">🔄 Ripeti per 4 settimane (1 mese)</option>
+                        <option value="8">🔄 Ripeti per 8 settimane (2 mesi)</option>
+                        <option value="12">🔄 Ripeti per 12 settimane (3 mesi)</option>
+                    </select>
                     
                     <button type="submit" class="bg-green-500 hover:bg-green-600 transition text-white px-6 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Salva Turno</button>
                 </form>
             </div>
 
-            <!-- DASHBOARD STATISTICHE TURNI (NUOVO) -->
+            <!-- DASHBOARD STATISTICHE MENSILI -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
-                <h3 class="text-xl font-bold mb-4">📊 Report e Statistiche Turni Staff</h3>
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <h3 class="text-xl font-bold">📊 Report e Resoconto Mensile Turni</h3>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Mese di riferimento:</label>
+                        <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
+                    </div>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b bg-gray-100 text-gray-600 text-sm">
                                 <th class="p-2">Dipendente</th>
                                 <th class="p-2">Reparto</th>
-                                <th class="p-2 text-right">Totale Turni Assegnati</th>
+                                <th class="p-2 text-right">Totale Turni nel Mese</th>
                             </tr>
                         </thead>
                         <tbody id="tabella-statistiche"></tbody>
@@ -163,12 +180,11 @@
 
         </div>
 
-        <!-- BACHECA TURNI CON FILTRI (NUOVO) -->
+        <!-- BACHECA TURNI -->
         <div class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
                 <h3 class="text-xl font-bold">📅 Bacheca e Gestione Turni</h3>
                 
-                <!-- BARRA FILTRI -->
                 <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                     <select id="filtro-reparto" onchange="caricaTurni()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none">
                         <option value="Tutti">🔍 Tutti i Reparti</option>
@@ -188,6 +204,11 @@
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
         let listaRepartiGlobal = [];
+
+        // Imposta il mese corrente nel selettore di default (YYYY-MM)
+        const oggi = new Date();
+        const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
 
         function caricaImpostazioni() {
             return fetch('/api/impostazioni').then(res => res.json()).then(data => {
@@ -306,11 +327,18 @@
             });
         }
 
-        // CARICA STATISTICHE TURNI (SOLO MANAGER)
-        function caricaStatistiche() {
-            fetch('/api/statistiche').then(res => res.json()).then(stats => {
+        // CARICA STATISTICHE FILTRATE PER MESE
+        function caricaStatisticheMensili() {
+            const meseSelezionato = document.getElementById('selettore-mese-stats').value;
+            if(!meseSelezionato) return;
+
+            fetch(`/api/statistiche/mensili?mese=${meseSelezionato}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
+                if(stats.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">Nessun dato per il mese selezionato.</td></tr>`;
+                    return;
+                }
                 stats.forEach(s => {
                     const tr = document.createElement('tr');
                     tr.className = "border-b hover:bg-gray-50";
@@ -380,7 +408,7 @@
                     
                     if(utenteLoggato.ruolo === 'manager') {
                         document.getElementById('sezione-manager').classList.remove('hidden');
-                        caricaStatistiche();
+                        caricaStatisticheMensili();
                     } else {
                         document.getElementById('sezione-manager').classList.add('hidden');
                     }
@@ -413,7 +441,7 @@
             };
             fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovo) }).then(() => {
                 caricaUtenti();
-                if(utenteLoggato.ruolo === 'manager') caricaStatistiche();
+                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
                 document.getElementById('form-nuovo-utente').reset();
             });
         });
@@ -422,7 +450,7 @@
             if(confirm("Rimuovere questo dipendente?")) {
                 fetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => {
                     caricaUtenti();
-                    if(utenteLoggato.ruolo === 'manager') caricaStatistiche();
+                    if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
                 });
             }
         };
@@ -466,7 +494,6 @@
             }).then(() => caricaTurni());
         };
 
-        // CARICA TURNI CON FILTRI ATTIVI
         function caricaTurni() {
             if (!utenteLoggato) return;
             
@@ -477,7 +504,6 @@
                 const lista = document.getElementById('lista-turni');
                 lista.innerHTML = ''; 
                 
-                // Applicazione Filtri
                 const turniFiltrati = turni.filter(turno => {
                     const matchReparto = (filtroRepartoVal === "Tutti" || turno.reparto === filtroRepartoVal);
                     const matchMiei = (!soloMiei || turno.utente_id === utenteLoggato.id || turno.sostituto_id === utenteLoggato.id);
@@ -549,6 +575,7 @@
             });
         }
 
+        // SALVATAGGIO TURNO CON RICORRENZA
         document.getElementById('form-turno').addEventListener('submit', function(event) {
             event.preventDefault();
             const selettore = document.getElementById('selettore-dipendente');
@@ -559,11 +586,17 @@
                 orario: document.getElementById('orario').value,
                 utente_id: selettore.value,
                 reparto: selettore.options[selettore.selectedIndex].dataset.reparto,
-                veicolo_id: document.getElementById('selettore-veicolo').value || null
+                veicolo_id: document.getElementById('selettore-veicolo').value || null,
+                settimane: document.getElementById('settimane-ricorrenza').value
             };
-            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoTurno) }).then(() => {
+
+            fetch('/api/turni', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(nuovoTurno) 
+            }).then(() => {
                 caricaTurni();
-                if(utenteLoggato.ruolo === 'manager') caricaStatistiche();
+                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
                 document.getElementById('form-turno').reset(); 
                 document.getElementById('selettore-veicolo').classList.add('hidden');
             });
@@ -574,7 +607,7 @@
         window.approvaScambio = function(idTurno) { 
             fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(() => {
                 caricaTurni();
-                if(utenteLoggato.ruolo === 'manager') caricaStatistiche();
+                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
             }); 
         };
     </script>
