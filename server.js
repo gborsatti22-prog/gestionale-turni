@@ -10,9 +10,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- DATABASE ---
+// --- INIZIALIZZAZIONE DATABASE SQLITE ---
 const db = new sqlite3.Database('./database.sqlite', (err) => {
-    if (err) console.error('Errore database:', err.message);
+    if (err) console.error('Errore connessione database:', err.message);
     else {
         console.log('📦 Connesso al database SQLite.');
         db.serialize(() => {
@@ -55,10 +55,10 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
                 FOREIGN KEY(veicolo_id) REFERENCES Veicoli(id)
             )`);
 
-            // Seed Dati Iniziali
+            // Popola dati iniziali se il DB è vuoto
             db.get("SELECT COUNT(*) AS count FROM Impostazioni", (err, row) => {
                 if (row && row.count === 0) {
-                    db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('nome_business', 'Pannello Operativo')");
+                    db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('nome_business', 'Gestionale Turni')");
                     db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('emoji_business', '🍔🛵')");
                 }
             });
@@ -98,7 +98,7 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
     }
 });
 
-// Funzione ausiliaria per aggiungere N settimane mantenendo il formato YYYY-MM-DD
+// Calcola le date successive mantenendo il formato YYYY-MM-DD
 function calcolaDataFutura(dateStr, numSettimane) {
     const [year, month, day] = dateStr.split('-').map(Number);
     const d = new Date(year, month - 1, day);
@@ -220,7 +220,7 @@ app.delete('/api/veicoli/:id', (req, res) => {
     });
 });
 
-// --- API TURNI (CON SUPPORTO TURNI RICORRENTI) ---
+// --- API TURNI (CON SUPPORTO A TURNI RICORRENTI) ---
 app.post('/api/turni', (req, res) => {
     const { giorno, orario, utente_id, reparto, veicolo_id, settimane } = req.body;
     const numSettimane = Math.max(1, parseInt(settimane) || 1);
@@ -235,7 +235,7 @@ app.post('/api/turni', (req, res) => {
         }
         stmt.finalize((err) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: `${numSettimane} turni salvati con successo!` });
+            res.json({ success: true, message: `${numSettimane} turni creati con successo!` });
         });
     });
 });
@@ -276,5 +276,5 @@ app.put('/api/turni/:id/approva', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server acceso sulla porta ${PORT}`);
+    console.log(`🚀 Server attivo sulla porta ${PORT}`);
 });

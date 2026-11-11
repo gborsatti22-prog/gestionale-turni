@@ -5,36 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Gestionale Turni</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configurazione PWA per Smartphone -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TurniApp">
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans p-4 md:p-8 max-w-4xl mx-auto">
+<body class="bg-gray-100 text-gray-800 font-sans p-4 md:p-8 max-w-5xl mx-auto">
     
-    <!-- BARRA DI LOGIN E INTESTAZIONE -->
+    <!-- BARRA HEADER E LOGIN -->
     <div class="bg-gray-900 text-white p-5 rounded-xl shadow-lg mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <h2 id="header-business" class="text-2xl font-bold flex items-center gap-2">Pannello Operativo 🍔🛵</h2>
+        <h2 id="header-business" class="text-2xl font-bold flex items-center gap-2">Gestionale Turni 🍔🛵</h2>
         
         <form id="form-login" class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-            <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto">
+            <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-medium">
                 <option value="">-- Chi sei? --</option>
             </select>
             <input type="password" id="login-password" placeholder="Password" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto">
-            <button type="submit" class="bg-blue-500 hover:bg-blue-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto">Accedi</button>
+            <button type="submit" class="bg-blue-500 hover:bg-blue-600 transition text-white px-5 py-2 rounded-lg font-bold w-full md:w-auto">Accedi</button>
         </form>
 
         <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-            <span id="nome-loggato" class="text-lg"></span>
+            <span id="nome-loggato" class="text-lg font-medium"></span>
             <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition px-4 py-2 rounded-lg font-bold w-full md:w-auto">Esci</button>
         </div>
     </div>
     
-    <!-- CONTENUTO APP -->
+    <!-- CONTENUTO PRINCIPALE -->
     <div id="contenuto-app" class="hidden space-y-6">
         
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
             
-            <!-- CREA TURNO (CON RICORRENZA) -->
+            <!-- SCHEDA 1: CREA E PROGRAMMA TURNO -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
-                <h3 class="text-xl font-bold mb-4">👑 Assegna un nuovo turno</h3>
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
                 <form id="form-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
@@ -44,10 +49,10 @@
                     </select>
                     
                     <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400">
-                        <option value="">-- Nessun Veicolo --</option>
+                        <option value="">-- Nessun Mezzo --</option>
                     </select>
 
-                    <!-- SELETTORE RICORRENZA -->
+                    <!-- SELETTORE TURNI RICORRENTI -->
                     <select id="settimane-ricorrenza" class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50 border-blue-300 font-semibold text-blue-900">
                         <option value="1">Singolo Turno</option>
                         <option value="2">🔄 Ripeti per 2 settimane</option>
@@ -60,12 +65,15 @@
                 </form>
             </div>
 
-            <!-- DASHBOARD STATISTICHE MENSILI -->
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                    <h3 class="text-xl font-bold">📊 Report e Resoconto Mensile Turni</h3>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900">📊 Report e Resoconto Mensile Turni</h3>
+                        <p class="text-sm text-gray-500">Visualizza il conteggio complessivo dei turni assegnati a ciascun dipendente.</p>
+                    </div>
                     <div class="flex items-center gap-2">
-                        <label class="text-xs font-bold text-gray-500 uppercase">Mese di riferimento:</label>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
                         <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
                     </div>
                 </div>
@@ -74,9 +82,9 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-2">Dipendente</th>
-                                <th class="p-2">Reparto</th>
-                                <th class="p-2 text-right">Totale Turni nel Mese</th>
+                                <th class="p-3">Dipendente</th>
+                                <th class="p-3">Reparto</th>
+                                <th class="p-3 text-right">Totale Turni nel Mese</th>
                             </tr>
                         </thead>
                         <tbody id="tabella-statistiche"></tbody>
@@ -84,7 +92,7 @@
                 </div>
             </div>
 
-            <!-- GESTIONE PROFILO ATTIVITÀ & REPARTI -->
+            <!-- SCHEDA 3 & 4: PROFILO ATTIVITÀ & REPARTI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
@@ -104,9 +112,9 @@
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
                     <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
                     <form id="form-nuovo-reparto" class="flex gap-2 mb-4">
-                        <input type="text" id="nuovo-reparto-nome" placeholder="Es. Barberia, Cassa..." required class="border p-2 rounded-lg outline-none flex-grow">
+                        <input type="text" id="nuovo-reparto-nome" placeholder="Es. Sala, Cassa..." required class="border p-2 rounded-lg outline-none flex-grow">
                         <label class="flex items-center gap-1 text-xs text-gray-600 font-bold cursor-pointer">
-                            <input type="checkbox" id="nuovo-reparto-veicolo" class="rounded"> Richiede Mezzo
+                            <input type="checkbox" id="nuovo-reparto-veicolo" class="rounded"> Serve Mezzo
                         </label>
                         <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg transition">+</button>
                     </form>
@@ -118,7 +126,7 @@
                 </div>
             </div>
 
-            <!-- GESTIONE TEAM -->
+            <!-- SCHEDA 5: GESTIONE TEAM -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600">
                 <h3 class="text-xl font-bold mb-4">👥 Gestione Team e Personale</h3>
                 <form id="form-nuovo-utente" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
@@ -151,7 +159,7 @@
                 </div>
             </div>
 
-            <!-- GESTIONE MEZZI -->
+            <!-- SCHEDA 6: GESTIONE MEZZI -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-600">
                 <h3 class="text-xl font-bold mb-4">🛵 Gestione Flotta Veicoli / Risorse</h3>
                 <form id="form-nuovo-veicolo" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
@@ -180,7 +188,7 @@
 
         </div>
 
-        <!-- BACHECA TURNI -->
+        <!-- BACHECA TURNI (VISIBILE A TUTTI) -->
         <div class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
                 <h3 class="text-xl font-bold">📅 Bacheca e Gestione Turni</h3>
@@ -199,20 +207,21 @@
         </div>
     </div>
 
+    <!-- JAVASCRIPT APP -->
     <script>
         let utenteLoggato = null; 
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
         let listaRepartiGlobal = [];
 
-        // Imposta il mese corrente nel selettore di default (YYYY-MM)
+        // Imposta il mese corrente nel selettore (YYYY-MM)
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
 
         function caricaImpostazioni() {
             return fetch('/api/impostazioni').then(res => res.json()).then(data => {
-                const titolo = `${data.nome_business || 'Pannello Operativo'} ${data.emoji_business || ''}`;
+                const titolo = `${data.nome_business || 'Gestionale Turni'} ${data.emoji_business || ''}`;
                 document.getElementById('header-business').textContent = titolo;
                 document.getElementById('page-title').textContent = titolo;
                 document.getElementById('set-nome-business').value = data.nome_business || '';
@@ -327,25 +336,24 @@
             });
         }
 
-        // CARICA STATISTICHE FILTRATE PER MESE
         function caricaStatisticheMensili() {
-            const meseSelezionato = document.getElementById('selettore-mese-stats').value;
-            if(!meseSelezionato) return;
+            const mese = document.getElementById('selettore-mese-stats').value;
+            if(!mese) return;
 
-            fetch(`/api/statistiche/mensili?mese=${meseSelezionato}`).then(res => res.json()).then(stats => {
+            fetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
                 if(stats.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">Nessun dato per il mese selezionato.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-gray-500">Nessun turno registrato per questo mese.</td></tr>`;
                     return;
                 }
                 stats.forEach(s => {
                     const tr = document.createElement('tr');
                     tr.className = "border-b hover:bg-gray-50";
                     tr.innerHTML = `
-                        <td class="p-2 font-bold">${s.nome}</td>
-                        <td class="p-2 text-sm text-gray-600">${s.reparto}</td>
-                        <td class="p-2 text-right"><span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full">${s.totale_turni} turni</span></td>
+                        <td class="p-3 font-bold">${s.nome}</td>
+                        <td class="p-3 text-sm text-gray-600">${s.reparto}</td>
+                        <td class="p-3 text-right"><span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full">${s.totale_turni} turni</span></td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -387,7 +395,7 @@
             }
         };
 
-        // LOGIN / LOGOUT
+        // GESTIONE LOGIN
         document.getElementById('form-login').addEventListener('submit', function(event) {
             event.preventDefault();
             const idUtente = document.getElementById('login-select').value;
@@ -511,7 +519,7 @@
                 });
 
                 if(turniFiltrati.length === 0) {
-                    lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato con i filtri selezionati.</div>`;
+                    lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato.</div>`;
                     return;
                 }
 
@@ -542,7 +550,7 @@
                     }
                     
                     if(turno.stato === 'in_approvazione') {
-                        testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto per sostituirlo!</div>`;
+                        testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto per questo turno!</div>`;
                     } else {
                         testoTurno += `<div class="mt-2 text-gray-500 text-xs uppercase tracking-wider font-bold">Stato: ${turno.stato.replace('_', ' ')}</div>`;
                     }
@@ -575,7 +583,7 @@
             });
         }
 
-        // SALVATAGGIO TURNO CON RICORRENZA
+        // SALVA TURNO CON RICORRENZA
         document.getElementById('form-turno').addEventListener('submit', function(event) {
             event.preventDefault();
             const selettore = document.getElementById('selettore-dipendente');
