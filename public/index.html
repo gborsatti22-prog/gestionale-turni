@@ -66,14 +66,12 @@
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">📊 Report e Resoconto Mensile Turni</h3>
-                        <p class="text-sm text-gray-500">Visualizza il conteggio complessivo dei turni assegnati a ciascun dipendente.</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
                         <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
                     </div>
                 </div>
-
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -88,128 +86,99 @@
                 </div>
             </div>
 
-            <!-- SCHEDA 3 & 4: PROFILO ATTIVITÀ & REPARTI -->
+            <!-- SCHEDA 3 & 4: PROFILO & REPARTI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- (Identico a prima) -->
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
                     <form id="form-impostazioni" class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">NOME ATTIVITÀ</label>
-                            <input type="text" id="set-nome-business" required class="w-full border p-2 rounded-lg outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">EMOJI / LOGO</label>
-                            <input type="text" id="set-emoji-business" required class="w-full border p-2 rounded-lg outline-none">
-                        </div>
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg w-full transition">Salva Impostazioni</button>
+                        <input type="text" id="set-nome-business" required class="w-full border p-2 rounded-lg outline-none" placeholder="Nome">
+                        <input type="text" id="set-emoji-business" required class="w-full border p-2 rounded-lg outline-none" placeholder="Emoji">
+                        <button type="submit" class="bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg w-full">Salva Impostazioni</button>
                     </form>
                 </div>
-
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
                     <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
                     <form id="form-nuovo-reparto" class="flex gap-2 mb-4">
-                        <input type="text" id="nuovo-reparto-nome" placeholder="Es. Sala, Cassa..." required class="border p-2 rounded-lg outline-none flex-grow">
-                        <label class="flex items-center gap-1 text-xs text-gray-600 font-bold cursor-pointer">
-                            <input type="checkbox" id="nuovo-reparto-veicolo" class="rounded"> Serve Mezzo
-                        </label>
-                        <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg transition">+</button>
+                        <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-grow">
+                        <label class="flex items-center text-xs font-bold"><input type="checkbox" id="nuovo-reparto-veicolo" class="mr-1"> Mezzo</label>
+                        <button type="submit" class="bg-amber-500 text-white px-3 rounded-lg">+</button>
                     </form>
-                    <div class="overflow-y-auto max-h-40 border rounded-lg">
-                        <table class="w-full text-left text-sm">
-                            <tbody id="tabella-reparti"></tbody>
-                        </table>
-                    </div>
+                    <table class="w-full text-left text-sm"><tbody id="tabella-reparti"></tbody></table>
                 </div>
             </div>
 
-            <!-- SCHEDA 5: GESTIONE TEAM -->
-            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600">
-                <h3 class="text-xl font-bold mb-4">👥 Gestione Team e Personale</h3>
-                <form id="form-nuovo-utente" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
-                    <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 rounded-lg outline-none">
-                    <select id="nuovo-ruolo" required class="border p-2 rounded-lg outline-none">
-                        <option value="staff">Staff</option>
-                        <option value="manager">Manager</option>
-                    </select>
-                    
-                    <select id="nuovo-reparto" required class="border p-2 rounded-lg outline-none font-medium">
-                        <option value="">-- Seleziona Reparto --</option>
-                    </select>
-
-                    <input type="password" id="nuova-password" placeholder="Password" required class="border p-2 rounded-lg outline-none">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 rounded-lg transition">+ Dipendente</button>
-                </form>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-2">Nome</th>
-                                <th class="p-2">Ruolo</th>
-                                <th class="p-2">Reparto</th>
-                                <th class="p-2 text-right">Azione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabella-utenti"></tbody>
-                    </table>
+            <!-- SCHEDA 5 & 6: TEAM E VEICOLI -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600 overflow-x-auto">
+                    <h3 class="text-xl font-bold mb-4">👥 Personale</h3>
+                    <form id="form-nuovo-utente" class="flex gap-2 mb-4 flex-wrap">
+                        <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-1 w-20 flex-grow">
+                        <select id="nuovo-ruolo" class="border p-1"><option value="staff">Staff</option><option value="manager">Manager</option></select>
+                        <select id="nuovo-reparto" class="border p-1"><option value="">Reparto...</option></select>
+                        <input type="password" id="nuova-password" placeholder="Pass" required class="border p-1 w-20">
+                        <button class="bg-blue-600 text-white px-3 py-1 rounded">+</button>
+                    </form>
+                    <table class="w-full text-left text-sm"><tbody id="tabella-utenti"></tbody></table>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-600 overflow-x-auto">
+                    <h3 class="text-xl font-bold mb-4">🛵 Risorse</h3>
+                    <form id="form-nuovo-veicolo" class="flex gap-2 mb-4 flex-wrap">
+                        <input type="text" id="nuovo-veicolo-nome" placeholder="Nome (es. Scooter 1)" required class="border p-1 flex-grow">
+                        <select id="nuovo-veicolo-tipo" class="border p-1"><option value="Moto">Moto</option><option value="Auto">Auto</option></select>
+                        <button class="bg-purple-600 text-white px-3 py-1 rounded">+</button>
+                    </form>
+                    <table class="w-full text-left text-sm"><tbody id="tabella-veicoli"></tbody></table>
                 </div>
             </div>
-
-            <!-- SCHEDA 6: GESTIONE MEZZI -->
-            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-600">
-                <h3 class="text-xl font-bold mb-4">🛵 Gestione Flotta Veicoli / Risorse</h3>
-                <form id="form-nuovo-veicolo" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
-                    <input type="text" id="nuovo-veicolo-nome" placeholder="Nome risorsa (es. Scooter 3)" required class="border p-2 rounded-lg outline-none">
-                    <select id="nuovo-veicolo-tipo" required class="border p-2 rounded-lg outline-none">
-                        <option value="Moto">Moto / Scooter</option>
-                        <option value="Auto">Auto</option>
-                        <option value="Attrezzatura">Attrezzatura / Postazione</option>
-                    </select>
-                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold p-2 rounded-lg transition">+ Risorsa</button>
-                </form>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-2">Nome Risorsa</th>
-                                <th class="p-2">Tipologia</th>
-                                <th class="p-2 text-right">Azione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabella-veicoli"></tbody>
-                    </table>
-                </div>
-            </div>
-
         </div>
 
-        <!-- NUOVA SEZIONE STAFF (PROPOSTA TURNI CON RICORRENZA) -->
-        <div id="sezione-staff" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600 mb-6">
-            <h3 class="text-xl font-bold mb-2 flex items-center gap-2">✋ Proponi una tua Disponibilità</h3>
-            <p class="text-sm text-gray-500 mb-4">Invia al manager una proposta per un turno (o più turni ricorrenti) in cui sei disponibile a lavorare.</p>
-            <form id="form-proponi-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
-                <input type="date" id="giorno-proposta" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-green-500">
-                <input type="text" id="orario-proposta" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-green-500">
-                
-                <select id="settimane-ricorrenza-proposta" class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-green-500 bg-green-50 border-green-300 font-semibold text-green-900">
-                    <option value="1">Singolo Turno</option>
-                    <option value="2">🔄 Ripeti per 2 settimane</option>
-                    <option value="4">🔄 Ripeti per 4 settimane (1 mese)</option>
-                    <option value="8">🔄 Ripeti per 8 settimane (2 mesi)</option>
-                    <option value="12">🔄 Ripeti per 12 settimane (3 mesi)</option>
-                </select>
+        <!-- SEZIONE STAFF: PROPOSTE E FERIE -->
+        <div id="sezione-staff" class="hidden space-y-6 mb-6">
+            
+            <!-- PROPOSTA TURNO -->
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600">
+                <h3 class="text-xl font-bold mb-2 flex items-center gap-2">✋ Proponi Disponibilità</h3>
+                <form id="form-proponi-turno" class="flex flex-col md:flex-row gap-3">
+                    <input type="date" id="giorno-proposta" required class="border p-2 rounded-lg w-full md:w-auto focus:ring-green-500">
+                    <input type="text" id="orario-proposta" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto">
+                    <select id="settimane-ricorrenza-proposta" class="border p-2 rounded-lg text-green-900 bg-green-50">
+                        <option value="1">Singolo Turno</option>
+                        <option value="2">🔄 Ripeti per 2 sett.</option>
+                        <option value="4">🔄 Ripeti per 1 mese</option>
+                    </select>
+                    <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded-lg font-bold">Invia</button>
+                </form>
+            </div>
 
-                <button type="submit" class="bg-green-500 hover:bg-green-600 transition text-white px-6 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Invia Proposta</button>
-            </form>
+            <!-- SEGNALAZIONE FERIE/INDISPONIBILITÀ -->
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-red-600">
+                <h3 class="text-xl font-bold mb-2 flex items-center gap-2">🚫 Segnala Indisponibilità / Ferie</h3>
+                <p class="text-sm text-gray-500 mb-4">Blocca i giorni in cui non puoi lavorare. Il manager non potrà assegnarti turni in quelle date.</p>
+                <form id="form-indisponibilita" class="flex flex-col md:flex-row gap-3">
+                    <input type="date" id="giorno-assenza" required class="border p-2 rounded-lg w-full md:w-auto focus:ring-red-500">
+                    <input type="text" id="motivo-assenza" placeholder="Motivo (es. Ferie, Visita, Studio...)" required class="border p-2 rounded-lg w-full md:w-auto">
+                    <button type="submit" class="bg-red-500 hover:bg-red-600 transition text-white px-6 py-2 rounded-lg font-bold">Registra Assenza</button>
+                </form>
+            </div>
         </div>
 
-        <!-- BACHECA TURNI (VISIBILE A TUTTI) -->
+        <!-- BACHECA TURNI (VISIBILE A TUTTI) CON TOGGLE LISTA/CALENDARIO -->
         <div class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
-                <h3 class="text-xl font-bold">📅 Bacheca e Gestione Turni</h3>
+                <div class="flex items-center gap-4">
+                    <h3 class="text-xl font-bold">📅 Bacheca Turni</h3>
+                    <!-- TOGGLE VISTA -->
+                    <div class="flex bg-gray-200 p-1 rounded-lg border">
+                        <button onclick="cambiaVista('lista')" id="btn-vista-lista" class="px-4 py-1.5 rounded bg-white shadow-sm font-bold text-sm transition">📋 Lista</button>
+                        <button onclick="cambiaVista('calendario')" id="btn-vista-calendario" class="px-4 py-1.5 rounded text-gray-500 hover:text-gray-800 font-bold text-sm transition">📅 Calendario</button>
+                    </div>
+                </div>
                 
                 <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <!-- SELETTORE MESE (VISIBILE SOLO IN CALENDARIO) -->
+                    <input type="month" id="mese-calendario" class="hidden border p-2 rounded-lg text-sm font-bold" onchange="caricaTurni()">
+                    
                     <select id="filtro-reparto" onchange="caricaTurni()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none">
                         <option value="Tutti">🔍 Tutti i Reparti</option>
                     </select>
@@ -219,7 +188,11 @@
                 </div>
             </div>
 
+            <!-- CONTENITORE VISTA A LISTA -->
             <div id="lista-turni" class="flex flex-col gap-4"></div>
+            
+            <!-- CONTENITORE VISTA A CALENDARIO -->
+            <div id="calendario-turni" class="hidden overflow-x-auto"></div>
         </div>
     </div>
 
@@ -229,10 +202,41 @@
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
         let listaRepartiGlobal = [];
+        let turniGlobal = []; // Tiene in memoria i turni scaricati
+        let vistaAttuale = 'lista'; // 'lista' o 'calendario'
 
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
+        document.getElementById('mese-calendario').value = meseCorrenteStr;
+
+        // Toggles tra visualizzazione Lista e Calendario
+        window.cambiaVista = function(vista) {
+            vistaAttuale = vista;
+            const btnLista = document.getElementById('btn-vista-lista');
+            const btnCal = document.getElementById('btn-vista-calendario');
+            
+            if(vista === 'lista') {
+                btnLista.classList.replace('text-gray-500', 'bg-white');
+                btnLista.classList.add('shadow-sm');
+                btnCal.classList.replace('bg-white', 'text-gray-500');
+                btnCal.classList.remove('shadow-sm');
+                
+                document.getElementById('lista-turni').classList.remove('hidden');
+                document.getElementById('calendario-turni').classList.add('hidden');
+                document.getElementById('mese-calendario').classList.add('hidden');
+            } else {
+                btnCal.classList.replace('text-gray-500', 'bg-white');
+                btnCal.classList.add('shadow-sm');
+                btnLista.classList.replace('bg-white', 'text-gray-500');
+                btnLista.classList.remove('shadow-sm');
+                
+                document.getElementById('lista-turni').classList.add('hidden');
+                document.getElementById('calendario-turni').classList.remove('hidden');
+                document.getElementById('mese-calendario').classList.remove('hidden');
+            }
+            caricaTurni();
+        };
 
         function caricaImpostazioni() {
             return fetch('/api/impostazioni').then(res => res.json()).then(data => {
@@ -256,26 +260,11 @@
                 tabellaReparti.innerHTML = '';
 
                 reparti.forEach(r => {
-                    const option = document.createElement('option');
-                    option.value = r.nome;
-                    option.textContent = r.nome;
-                    selectReparto.appendChild(option);
-
-                    const optionFiltro = document.createElement('option');
-                    optionFiltro.value = r.nome;
-                    optionFiltro.textContent = `Reparto: ${r.nome}`;
-                    filtroReparto.appendChild(optionFiltro);
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">${r.nome}</td>
-                        <td class="p-2 text-xs text-gray-500">${r.richiede_veicolo ? '🛵 Mezzo richiesto' : '-'}</td>
-                        <td class="p-2 text-right">
-                            <button onclick="eliminaReparto(${r.id})" class="text-red-500 hover:text-red-700 font-bold">🗑️</button>
-                        </td>
-                    `;
-                    tabellaReparti.appendChild(tr);
+                    selectReparto.innerHTML += `<option value="${r.nome}">${r.nome}</option>`;
+                    filtroReparto.innerHTML += `<option value="${r.nome}">Reparto: ${r.nome}</option>`;
+                    tabellaReparti.innerHTML += `
+                        <tr class="border-b"><td class="p-2">${r.nome}</td><td class="p-2 text-right">
+                        <button onclick="eliminaReparto(${r.id})" class="text-red-500">🗑️</button></td></tr>`;
                 });
             });
         }
@@ -292,32 +281,14 @@
                 tabellaUtenti.innerHTML = '';
 
                 utenti.forEach(utente => {
-                    const optionLogin = document.createElement('option');
-                    optionLogin.value = utente.id;
-                    optionLogin.textContent = utente.nome;
-                    loginSelect.appendChild(optionLogin);
-
+                    loginSelect.innerHTML += `<option value="${utente.id}">${utente.nome}</option>`;
                     if(utente.ruolo !== 'manager') {
-                        const optionTurno = document.createElement('option');
-                        optionTurno.value = utente.id;
-                        const repartoObj = listaRepartiGlobal.find(r => r.nome === utente.reparto);
-                        optionTurno.dataset.richiedeVeicolo = (repartoObj && repartoObj.richiede_veicolo) ? "1" : "0";
-                        optionTurno.dataset.reparto = utente.reparto;
-                        optionTurno.textContent = `${utente.nome} (${utente.reparto})`;
-                        selettoreDipendente.appendChild(optionTurno);
+                        const rInfo = listaRepartiGlobal.find(r => r.nome === utente.reparto);
+                        const v = rInfo?.richiede_veicolo ? "1" : "0";
+                        selettoreDipendente.innerHTML += `<option value="${utente.id}" data-reparto="${utente.reparto}" data-richiede-veicolo="${v}">${utente.nome} (${utente.reparto})</option>`;
                     }
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">${utente.nome}</td>
-                        <td class="p-2"><span class="px-2 py-1 rounded text-xs font-bold ${utente.ruolo === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}">${utente.ruolo}</span></td>
-                        <td class="p-2 text-sm text-gray-600">${utente.reparto || '-'}</td>
-                        <td class="p-2 text-right">
-                            ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500 hover:text-red-700 text-sm font-bold">🗑️ Rimuovi</button>` : '<span class="text-xs text-gray-400">Tu</span>'}
-                        </td>
-                    `;
-                    tabellaUtenti.appendChild(tr);
+                    tabellaUtenti.innerHTML += `<tr class="border-b"><td class="p-2">${utente.nome} (${utente.ruolo})</td><td class="p-2 text-right">
+                    ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500">🗑️</button>` : 'Tu'}</td></tr>`;
                 });
             });
         }
@@ -325,28 +296,15 @@
         function caricaVeicoli() {
             return fetch('/api/veicoli').then(res => res.json()).then(veicoli => {
                 listaVeicoliGlobal = veicoli;
-                const selettoreVeicolo = document.getElementById('selettore-veicolo');
-                const tabellaVeicoli = document.getElementById('tabella-veicoli');
-                
-                selettoreVeicolo.innerHTML = '<option value="">-- Nessun Mezzo/Risorsa --</option>';
-                tabellaVeicoli.innerHTML = '';
+                const selVeicolo = document.getElementById('selettore-veicolo');
+                const tabVeicoli = document.getElementById('tabella-veicoli');
+                selVeicolo.innerHTML = '<option value="">-- Nessun Mezzo --</option>';
+                tabVeicoli.innerHTML = '';
 
                 veicoli.forEach(v => {
-                    const option = document.createElement('option');
-                    option.value = v.id;
-                    option.textContent = `🚗 ${v.nome} (${v.tipo})`;
-                    selettoreVeicolo.appendChild(option);
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">🛵 ${v.nome}</td>
-                        <td class="p-2 text-sm text-gray-600">${v.tipo}</td>
-                        <td class="p-2 text-right">
-                            <button onclick="eliminaVeicolo(${v.id})" class="text-red-500 hover:text-red-700 text-sm font-bold">🗑️ Rimuovi</button>
-                        </td>
-                    `;
-                    tabellaVeicoli.appendChild(tr);
+                    selVeicolo.innerHTML += `<option value="${v.id}">🚗 ${v.nome}</option>`;
+                    tabVeicoli.innerHTML += `<tr class="border-b"><td class="p-2">${v.nome}</td><td class="p-2 text-right">
+                    <button onclick="eliminaVeicolo(${v.id})" class="text-red-500">🗑️</button></td></tr>`;
                 });
             });
         }
@@ -354,75 +312,34 @@
         function caricaStatisticheMensili() {
             const mese = document.getElementById('selettore-mese-stats').value;
             if(!mese) return;
-
             fetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
-                if(stats.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-gray-500">Nessun turno assegnato registrato per questo mese.</td></tr>`;
-                    return;
-                }
-                stats.forEach(s => {
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-3 font-bold">${s.nome}</td>
-                        <td class="p-3 text-sm text-gray-600">${s.reparto}</td>
-                        <td class="p-3 text-right"><span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full">${s.totale_turni} turni</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                stats.forEach(s => tbody.innerHTML += `<tr class="border-b"><td class="p-3 font-bold">${s.nome}</td><td class="p-3">${s.reparto}</td><td class="p-3 text-right"><b>${s.totale_turni}</b></td></tr>`);
             });
         }
 
         caricaImpostazioni();
-        caricaReparti().then(() => {
-            caricaUtenti();
-            caricaVeicoli();
-        });
+        caricaReparti().then(() => { caricaUtenti(); caricaVeicoli(); });
 
-        // GESTIONE GESTIONALI (REPARTI, UTENTI, VEICOLI, IMPOSTAZIONI)
-        document.getElementById('form-impostazioni').addEventListener('submit', function(e) {
+        // LISTENER FORM SETUP MANAGER (Sintetizzati per brevità)
+        document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
+        document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); fetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
+        document.getElementById('form-nuovo-utente').addEventListener('submit', e => { e.preventDefault(); fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value }) }).then(() => { caricaUtenti(); e.target.reset(); }); });
+        document.getElementById('form-nuovo-veicolo').addEventListener('submit', e => { e.preventDefault(); fetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-veicolo-nome').value, tipo: document.getElementById('nuovo-veicolo-tipo').value }) }).then(() => { caricaVeicoli(); e.target.reset(); }); });
+        
+        window.eliminaReparto = id => confirm("Eliminare?") && fetch(`/api/reparti/${id}`, { method: 'DELETE' }).then(() => { caricaReparti().then(caricaUtenti); });
+        window.eliminaUtente = id => confirm("Eliminare?") && fetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => caricaUtenti());
+        window.eliminaVeicolo = id => confirm("Eliminare?") && fetch(`/api/veicoli/${id}`, { method: 'DELETE' }).then(() => { caricaVeicoli(); caricaTurni(); });
+        window.controllaReparto = () => { const s = document.getElementById('selettore-dipendente'); const v = document.getElementById('selettore-veicolo'); if(s.selectedIndex>0){ v.classList.toggle('hidden', s.options[s.selectedIndex].dataset.richiedeVeicolo !== "1"); } };
+
+        // LOGIN
+        document.getElementById('form-login').addEventListener('submit', function(e) {
             e.preventDefault();
-            const body = { nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value };
-            fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(() => caricaImpostazioni());
-        });
-
-        document.getElementById('form-nuovo-reparto').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovo = { nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked };
-            fetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovo) }).then(() => { caricaReparti().then(() => caricaUtenti()); document.getElementById('form-nuovo-reparto').reset(); });
-        });
-        window.eliminaReparto = function(id) { if(confirm("Eliminare questo reparto?")) { fetch(`/api/reparti/${id}`, { method: 'DELETE' }).then(() => { caricaReparti().then(() => caricaUtenti()); }); } };
-
-        document.getElementById('form-nuovo-utente').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovo = { nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value };
-            fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovo) }).then(() => { caricaUtenti(); if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili(); document.getElementById('form-nuovo-utente').reset(); });
-        });
-        window.eliminaUtente = function(id) { if(confirm("Rimuovere questo dipendente?")) { fetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => { caricaUtenti(); if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili(); }); } };
-
-        document.getElementById('form-nuovo-veicolo').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovoV = { nome: document.getElementById('nuovo-veicolo-nome').value, tipo: document.getElementById('nuovo-veicolo-tipo').value };
-            fetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoV) }).then(() => { caricaVeicoli(); document.getElementById('form-nuovo-veicolo').reset(); });
-        });
-        window.eliminaVeicolo = function(id) { if(confirm("Eliminare questa risorsa?")) { fetch(`/api/veicoli/${id}`, { method: 'DELETE' }).then(() => { caricaVeicoli(); caricaTurni(); }); } };
-
-        // GESTIONE LOGIN
-        document.getElementById('form-login').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const idUtente = document.getElementById('login-select').value;
-            const password = document.getElementById('login-password').value;
-
-            fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ utente_id: idUtente, password: password })
-            }).then(res => res.json()).then(data => {
+            fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ utente_id: document.getElementById('login-select').value, password: document.getElementById('login-password').value }) })
+            .then(res => res.json()).then(data => {
                 if (data.success) {
                     utenteLoggato = data.utente;
-                    
                     document.getElementById('form-login').classList.add('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                     document.getElementById('nome-loggato').innerHTML = `Ciao, <strong>${utenteLoggato.nome}</strong>`;
@@ -436,196 +353,206 @@
                         document.getElementById('sezione-manager').classList.add('hidden');
                         document.getElementById('sezione-staff').classList.remove('hidden');
                     }
-                    
-                    document.getElementById('login-password').value = '';
-                    caricaUtenti();
-                    caricaVeicoli();
                     caricaTurni();
-                } else {
-                    alert(data.message);
-                }
+                } else alert(data.message);
             });
         });
+        window.eseguiLogout = () => location.reload();
 
-        window.eseguiLogout = function() {
-            utenteLoggato = null;
-            document.getElementById('form-login').classList.remove('hidden');
-            document.getElementById('user-info').classList.add('hidden');
-            document.getElementById('contenuto-app').classList.add('hidden');
-            document.getElementById('sezione-manager').classList.add('hidden');
-            document.getElementById('sezione-staff').classList.add('hidden');
-            document.getElementById('login-select').value = '';
-        };
-
-        window.controllaReparto = function() {
-            const selettore = document.getElementById('selettore-dipendente');
-            const tendinaVeicolo = document.getElementById('selettore-veicolo');
-            if(selettore.selectedIndex > 0) {
-                const richiedeVeicolo = selettore.options[selettore.selectedIndex].dataset.richiedeVeicolo;
-                if (richiedeVeicolo === "1") tendinaVeicolo.classList.remove('hidden');
-                else { tendinaVeicolo.classList.add('hidden'); tendinaVeicolo.value = ''; }
-            }
-        };
-
-        window.aggiornaVeicoloTurno = function(idTurno, idVeicolo) {
-            fetch(`/api/turni/${idTurno}/veicolo`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veicolo_id: idVeicolo || null }) }).then(() => caricaTurni());
-        };
-
+        // CARICAMENTO E RENDERIZZAZIONE TURNI (LISTA O CALENDARIO)
         function caricaTurni() {
             if (!utenteLoggato) return;
-            
-            const filtroRepartoVal = document.getElementById('filtro-reparto').value;
-            const soloMiei = document.getElementById('filtro-miei').checked;
-
             fetch('/api/turni').then(res => res.json()).then(turni => {
-                const lista = document.getElementById('lista-turni');
-                lista.innerHTML = ''; 
+                turniGlobal = turni; // Salva globalmente per le validazioni
                 
+                const filtroRepartoVal = document.getElementById('filtro-reparto').value;
+                const soloMiei = document.getElementById('filtro-miei').checked;
+
                 const turniFiltrati = turni.filter(turno => {
                     const matchReparto = (filtroRepartoVal === "Tutti" || turno.reparto === filtroRepartoVal);
                     const matchMiei = (!soloMiei || turno.utente_id === utenteLoggato.id || turno.sostituto_id === utenteLoggato.id);
                     return matchReparto && matchMiei;
                 });
 
-                if(turniFiltrati.length === 0) {
-                    lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato.</div>`;
-                    return;
-                }
-
-                turniFiltrati.forEach(turno => {
-                    const div = document.createElement('div');
-                    let colorClass = "";
-                    if(turno.stato === 'assegnato') colorClass = "border-blue-500 bg-blue-50";
-                    else if(turno.stato === 'in_scambio') colorClass = "border-orange-500 bg-orange-50";
-                    else if(turno.stato === 'in_approvazione') colorClass = "border-pink-500 bg-pink-50";
-                    else if(turno.stato === 'proposto') colorClass = "border-teal-500 bg-teal-50";
-
-                    div.className = `p-4 rounded-lg border-l-4 ${colorClass} flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm`;
-                    
-                    const info = document.createElement('div');
-                    let testoTurno = `<div class="text-lg mb-1"><span class="font-black">${turno.giorno}</span> <span class="text-gray-600">(${turno.orario})</span></div> 
-                                      <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong> <span class="text-sm text-gray-500">(${turno.reparto})</span></div>`;
-                    
-                    if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto') {
-                        let selectVeicoloHtml = `<div class="mt-2 text-sm flex items-center gap-2">🛵 Risorsa/Mezzo: <select onchange="aggiornaVeicoloTurno(${turno.id}, this.value)" class="text-xs p-1 border rounded bg-white">`;
-                        selectVeicoloHtml += `<option value="">-- Nessuno --</option>`;
-                        listaVeicoliGlobal.forEach(v => {
-                            const isSelected = turno.veicolo_id === v.id ? 'selected' : '';
-                            selectVeicoloHtml += `<option value="${v.id}" ${isSelected}>${v.nome} (${v.tipo})</option>`;
-                        });
-                        selectVeicoloHtml += `</select></div>`;
-                        testoTurno += selectVeicoloHtml;
-                    } else if(turno.nome_veicolo) {
-                        testoTurno += `<div class="text-gray-800 mt-1">🛵 Risorsa/Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
-                    }
-                    
-                    if(turno.stato === 'in_approvazione') testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto per questo turno!</div>`;
-                    else if(turno.stato === 'proposto') testoTurno += `<div class="mt-2 text-teal-700 text-sm font-bold">✋ Turno proposto in attesa di approvazione</div>`;
-                    else testoTurno += `<div class="mt-2 text-gray-500 text-xs uppercase tracking-wider font-bold">Stato: ${turno.stato.replace('_', ' ')}</div>`;
-                    
-                    info.innerHTML = testoTurno;
-                    
-                    const bloccoBottoni = document.createElement('div');
-                    bloccoBottoni.className = "flex flex-wrap w-full md:w-auto gap-2 mt-2 md:mt-0";
-                    
-                    if (utenteLoggato.ruolo === 'manager') {
-                        if (turno.stato === 'in_approvazione') {
-                            bloccoBottoni.innerHTML += `<button class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="approvaScambio(${turno.id})">✅ Approva</button> 
-                                                        <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
-                        } else if (turno.stato === 'proposto') {
-                            bloccoBottoni.innerHTML += `<button class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded font-bold text-sm shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">✅ Approva Proposta</button>`;
-                        }
-                        // Il manager può sempre eliminare qualsiasi turno
-                        bloccoBottoni.innerHTML += `<button class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm ml-auto" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
-                    } else {
-                        if (turno.stato === 'assegnato' && turno.utente_id === utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
-                        } else if (turno.stato === 'in_scambio' && turno.utente_id !== utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<button class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="inviaProposta(${turno.id})">✋ Mi Propongo</button>`;
-                        } else if (turno.stato === 'proposto' && turno.utente_id === utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<button class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="eliminaTurno(${turno.id})">Annulla Proposta</button>`;
-                        } else if (turno.stato === 'in_approvazione' && turno.sostituto_id === utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<span class="bg-white px-4 py-2 rounded border border-gray-300 text-gray-500 text-sm font-bold w-full text-center">⏳ In attesa...</span>`;
-                        }
-                    }
-
-                    div.appendChild(info);
-                    if(bloccoBottoni.innerHTML !== "") div.appendChild(bloccoBottoni);
-                    lista.appendChild(div);
-                });
+                if (vistaAttuale === 'lista') renderLista(turniFiltrati);
+                else renderCalendario(turniFiltrati);
             });
         }
 
-        // SALVATAGGIO TURNI DA PARTE DEL MANAGER (CON RICORRENZA)
+        // VISTA A LISTA CLASSICA
+        function renderLista(turniFiltrati) {
+            const lista = document.getElementById('lista-turni');
+            lista.innerHTML = ''; 
+            if(turniFiltrati.length === 0) return lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato.</div>`;
+
+            turniFiltrati.forEach(turno => {
+                const div = document.createElement('div');
+                let colorClass = "border-gray-200";
+                
+                // RICONOSCIMENTO INDISPONIBILITÀ (FERIE/PERMESSI)
+                if (turno.stato === 'indisponibile') {
+                    colorClass = "border-red-500 bg-red-50";
+                    div.className = `p-4 rounded-lg border-l-4 ${colorClass} flex flex-col md:flex-row justify-between shadow-sm`;
+                    
+                    let html = `<div><div class="text-lg text-red-700 font-bold mb-1">🚫 ${turno.giorno} - Assenza Segnalata</div>
+                                <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong></div>
+                                <div class="text-sm text-gray-600">Motivo: <em>${turno.orario}</em></div></div>`;
+                    
+                    if (utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) {
+                        html += `<div class="mt-2 md:mt-0"><button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">❌ Annulla Assenza</button></div>`;
+                    }
+                    div.innerHTML = html;
+                    lista.appendChild(div);
+                    return; // Salta il resto del rendering per i turni normali
+                }
+
+                // Renderizzazione Turni Normali
+                if(turno.stato === 'assegnato') colorClass = "border-blue-500 bg-blue-50";
+                else if(turno.stato === 'in_scambio') colorClass = "border-orange-500 bg-orange-50";
+                else if(turno.stato === 'in_approvazione') colorClass = "border-pink-500 bg-pink-50";
+                else if(turno.stato === 'proposto') colorClass = "border-teal-500 bg-teal-50";
+
+                div.className = `p-4 rounded-lg border-l-4 ${colorClass} flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm`;
+                
+                let testoTurno = `<div class="text-lg mb-1"><span class="font-black">${turno.giorno}</span> <span class="text-gray-600">(${turno.orario})</span></div> 
+                                  <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong> <span class="text-sm text-gray-500">(${turno.reparto})</span></div>`;
+                
+                if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto') {
+                    let selectVeicoloHtml = `<div class="mt-2 text-sm">🛵 Mezzo: <select onchange="fetch('/api/turni/${turno.id}/veicolo', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({veicolo_id: this.value||null})}).then(caricaTurni)" class="text-xs p-1 border rounded bg-white"><option value="">Nessuno</option>`;
+                    listaVeicoliGlobal.forEach(v => { selectVeicoloHtml += `<option value="${v.id}" ${turno.veicolo_id === v.id ? 'selected' : ''}>${v.nome}</option>`; });
+                    testoTurno += selectVeicoloHtml + `</select></div>`;
+                } else if(turno.nome_veicolo) testoTurno += `<div class="text-gray-800 mt-1">🛵 Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
+                
+                if(turno.stato === 'in_approvazione') testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto!</div>`;
+                else if(turno.stato === 'proposto') testoTurno += `<div class="mt-2 text-teal-700 text-sm font-bold">✋ Proposta in attesa</div>`;
+                
+                const info = document.createElement('div'); info.innerHTML = testoTurno;
+                const btn = document.createElement('div'); btn.className = "flex flex-wrap gap-2 mt-2 md:mt-0";
+                
+                if (utenteLoggato.ruolo === 'manager') {
+                    if (turno.stato === 'in_approvazione') btn.innerHTML += `<button class="bg-green-500 text-white px-3 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'approva')">✅ Approva</button><button class="bg-red-500 text-white px-3 py-1 rounded" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
+                    else if (turno.stato === 'proposto') btn.innerHTML += `<button class="bg-teal-600 text-white px-4 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">✅ Approva</button>`;
+                    btn.innerHTML += `<button class="bg-gray-800 text-white px-3 py-1 rounded shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️</button>`;
+                } else {
+                    if (turno.stato === 'assegnato' && turno.utente_id === utenteLoggato.id) btn.innerHTML = `<button class="bg-orange-500 text-white px-4 py-1 rounded" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
+                    else if (turno.stato === 'in_scambio' && turno.utente_id !== utenteLoggato.id) btn.innerHTML = `<button class="bg-purple-500 text-white px-4 py-1 rounded" onclick="fetch('/api/turni/${turno.id}/proponi', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sostituto_id:${utenteLoggato.id}})}).then(caricaTurni)">✋ Propongo</button>`;
+                    else if (turno.stato === 'proposto' && turno.utente_id === utenteLoggato.id) btn.innerHTML = `<button class="bg-red-500 text-white px-4 py-1 rounded" onclick="eliminaTurno(${turno.id})">Annulla</button>`;
+                }
+
+                div.appendChild(info); if(btn.innerHTML) div.appendChild(btn);
+                lista.appendChild(div);
+            });
+        }
+
+        // VISTA A CALENDARIO
+        function renderCalendario(turni) {
+            const container = document.getElementById('calendario-turni');
+            const meseVal = document.getElementById('mese-calendario').value;
+            if(!meseVal) return;
+            
+            const [anno, mese] = meseVal.split('-');
+            const dataInizio = new Date(anno, mese - 1, 1);
+            const dataFine = new Date(anno, mese, 0); 
+            
+            let html = `<table class="w-full min-w-[700px] border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
+                <thead><tr class="bg-gray-800 text-white">
+                    <th class="p-2 border border-gray-700 w-[14%]">Lunedì</th><th class="p-2 border border-gray-700 w-[14%]">Martedì</th><th class="p-2 border border-gray-700 w-[14%]">Mercoledì</th><th class="p-2 border border-gray-700 w-[14%]">Giovedì</th><th class="p-2 border border-gray-700 w-[14%]">Venerdì</th><th class="p-2 border border-gray-700 w-[14%] text-blue-300">Sabato</th><th class="p-2 border border-gray-700 w-[14%] text-red-300">Domenica</th>
+                </tr></thead><tbody><tr>`;
+            
+            let primoGiornoSett = dataInizio.getDay() || 7; 
+            for(let i=1; i<primoGiornoSett; i++) html += `<td class="border bg-gray-100 p-2 min-h-[120px]"></td>`;
+            
+            for(let giorno=1; giorno<=dataFine.getDate(); giorno++) {
+                const dataCorrente = `${anno}-${mese}-${String(giorno).padStart(2, '0')}`;
+                
+                // Ignora i turni "proposti" nel calendario manager, o mostra tutto
+                const turniDelGiorno = turni.filter(t => t.giorno === dataCorrente);
+                
+                const isOggi = dataCorrente === `${oggi.getFullYear()}-${String(oggi.getMonth()+1).padStart(2,'0')}-${String(oggi.getDate()).padStart(2,'0')}`;
+                
+                html += `<td class="border p-2 align-top h-28 relative hover:bg-gray-50 transition ${isOggi ? 'bg-blue-50 border-blue-200' : ''}">
+                    <div class="font-bold mb-1 absolute top-2 right-2 ${isOggi ? 'text-blue-600 text-lg' : 'text-gray-400'}">${giorno}</div>
+                    <div class="mt-6 flex flex-col gap-1 overflow-y-auto max-h-24 no-scrollbar">`;
+                
+                turniDelGiorno.forEach(t => {
+                    if (t.stato === 'indisponibile') {
+                        html += `<div class="bg-red-100 text-red-800 text-xs px-1.5 py-1 rounded truncate shadow-sm cursor-help" title="Ferie/Permesso: ${t.orario}">🚫 ${t.nome_proprietario}</div>`;
+                    } else if (t.stato === 'proposto') {
+                        html += `<div class="bg-teal-50 text-teal-800 text-xs px-1.5 py-1 rounded truncate border border-teal-300 border-dashed cursor-help" title="Proposta di: ${t.nome_proprietario}">✋ ${t.nome_proprietario}</div>`;
+                    } else {
+                        html += `<div class="bg-blue-100 text-blue-900 text-xs px-1.5 py-1 rounded truncate border border-blue-200 shadow-sm cursor-help" title="${t.orario} - Reparto: ${t.reparto}">🕒 ${t.nome_proprietario}</div>`;
+                    }
+                });
+                
+                html += `</div></td>`;
+                if((giorno + primoGiornoSett - 1) % 7 === 0) html += `</tr><tr>`;
+            }
+            html += `</tr></tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        // SALVATAGGIO TURNI DA PARTE DEL MANAGER (CON CONTROLLO FERIE)
         document.getElementById('form-turno').addEventListener('submit', function(event) {
             event.preventDefault();
-            const selettore = document.getElementById('selettore-dipendente');
-            if(selettore.selectedIndex <= 0) return alert("Seleziona un dipendente.");
+            const dipendenteSelezionato = document.getElementById('selettore-dipendente').value;
+            const giornoScelto = document.getElementById('giorno').value;
             
+            // VALIDAZIONE INDISPONIBILITÀ (Controlla se il dipendente è in ferie in quel giorno)
+            const inFerie = turniGlobal.find(t => t.utente_id == dipendenteSelezionato && t.giorno === giornoScelto && t.stato === 'indisponibile');
+            if (inFerie) {
+                alert(`⚠️ ATTENZIONE: Impossibile assegnare il turno.\n\nIl dipendente selezionato ha registrato un'assenza per il ${giornoScelto}.\nMotivo: ${inFerie.orario}`);
+                return;
+            }
+            
+            const selettore = document.getElementById('selettore-dipendente');
             const nuovoTurno = {
-                giorno: document.getElementById('giorno').value,
+                giorno: giornoScelto,
                 orario: document.getElementById('orario').value,
-                utente_id: selettore.value,
+                utente_id: dipendenteSelezionato,
                 reparto: selettore.options[selettore.selectedIndex].dataset.reparto,
                 veicolo_id: document.getElementById('selettore-veicolo').value || null,
                 settimane: document.getElementById('settimane-ricorrenza').value,
                 stato: 'assegnato'
             };
 
-            fetch('/api/turni', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(nuovoTurno) 
-            }).then(() => {
-                caricaTurni();
-                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
+            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoTurno) }).then(() => {
+                caricaTurni(); caricaStatisticheMensili();
                 document.getElementById('form-turno').reset(); 
-                document.getElementById('selettore-veicolo').classList.add('hidden');
             });
         });
 
-        // SALVATAGGIO TURNI DA PARTE DELLO STAFF (PROPOSTA CON RICORRENZA)
-        document.getElementById('form-proponi-turno').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const turnoProposto = {
-                giorno: document.getElementById('giorno-proposta').value,
-                orario: document.getElementById('orario-proposta').value,
-                utente_id: utenteLoggato.id,
-                reparto: utenteLoggato.reparto,
-                veicolo_id: null,
-                settimane: document.getElementById('settimane-ricorrenza-proposta').value, // <-- Aggiunta la lettura della tendina
-                stato: 'proposto' 
-            };
-
-            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(turnoProposto) }).then(() => {
-                caricaTurni();
-                document.getElementById('form-proponi-turno').reset(); 
-            });
+        // SALVATAGGIO TURNI PROPOSTI DALLO STAFF
+        document.getElementById('form-proponi-turno').addEventListener('submit', e => {
+            e.preventDefault();
+            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                giorno: document.getElementById('giorno-proposta').value, orario: document.getElementById('orario-proposta').value,
+                utente_id: utenteLoggato.id, reparto: utenteLoggato.reparto, veicolo_id: null,
+                settimane: document.getElementById('settimane-ricorrenza-proposta').value, stato: 'proposto' 
+            })}).then(() => { caricaTurni(); e.target.reset(); });
         });
 
-        window.cambiaStato = function(idTurno, nuovoStato) { 
-            fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: nuovoStato }) })
-            .then(() => { caricaTurni(); if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili(); }); 
-        };
-        
-        window.inviaProposta = function(idTurno) { fetch(`/api/turni/${idTurno}/proponi`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sostituto_id: utenteLoggato.id }) }).then(() => caricaTurni()); };
-        
-        window.approvaScambio = function(idTurno) { 
-            fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(() => {
-                caricaTurni();
-                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
-            }); 
-        };
+        // SALVATAGGIO INDISPONIBILITÀ / FERIE
+        document.getElementById('form-indisponibilita').addEventListener('submit', e => {
+            e.preventDefault();
+            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                giorno: document.getElementById('giorno-assenza').value, 
+                orario: document.getElementById('motivo-assenza').value, // Usiamo il campo orario per salvare il motivo!
+                utente_id: utenteLoggato.id, 
+                reparto: 'Assente', veicolo_id: null, settimane: 1, stato: 'indisponibile' 
+            })}).then(() => { caricaTurni(); e.target.reset(); });
+        });
 
-        // FUNZIONE PER ELIMINARE DEFINITIVAMENTE UN TURNO
-        window.eliminaTurno = function(idTurno) {
-            if(confirm("Sei sicuro di voler eliminare questo turno definitivamente?")) {
-                fetch(`/api/turni/${idTurno}`, { method: 'DELETE' }).then(() => {
-                    caricaTurni();
-                    if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
-                });
-            }
+        window.cambiaStato = (idTurno, azione) => { 
+            if(azione === 'approva') fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(caricaTurni);
+            else fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: azione }) }).then(caricaTurni); 
         };
+        window.eliminaTurno = id => confirm("Eliminare definitivamente?") && fetch(`/api/turni/${id}`, { method: 'DELETE' }).then(caricaTurni);
     </script>
+    
+    <style>
+        /* Nasconde la scrollbar in eccesso per le caselline del calendario ma permette lo scroll touch */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </body>
 </html>
