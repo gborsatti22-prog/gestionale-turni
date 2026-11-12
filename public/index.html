@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Gestionale Turni</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Configurazione PWA per Smartphone -->
     <meta name="theme-color" content="#111827">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TurniApp">
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4 md:p-8 max-w-5xl mx-auto">
     
@@ -31,168 +29,65 @@
         </div>
     </div>
     
-    <!-- CONTENUTO PRINCIPALE -->
     <div id="contenuto-app" class="hidden space-y-6">
         
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
             
-            <!-- SCHEDA 1: CREA E PROGRAMMA TURNO -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <h3 class="text-xl font-bold mb-4 flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
                 <form id="form-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
-                    <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
-                    <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
-                    
-                    <select id="selettore-dipendente" onchange="controllaReparto()" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none">
+                    <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none">
+                    <select id="selettore-dipendente" onchange="controllaReparto()" required class="border p-2 rounded-lg w-full md:w-auto outline-none">
                         <option value="">-- Scegli dipendente --</option>
                     </select>
-                    
-                    <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400">
+                    <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none bg-yellow-50 border-yellow-400">
                         <option value="">-- Nessun Mezzo --</option>
                     </select>
-
-                    <!-- SELETTORE TURNI RICORRENTI -->
-                    <select id="settimane-ricorrenza" class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50 border-blue-300 font-semibold text-blue-900">
+                    <select id="settimane-ricorrenza" class="border p-2 rounded-lg w-full md:w-auto outline-none bg-blue-50 border-blue-300 font-semibold text-blue-900">
                         <option value="1">Singolo Turno</option>
                         <option value="2">🔄 Ripeti per 2 settimane</option>
                         <option value="4">🔄 Ripeti per 4 settimane (1 mese)</option>
-                        <option value="8">🔄 Ripeti per 8 settimane (2 mesi)</option>
-                        <option value="12">🔄 Ripeti per 12 settimane (3 mesi)</option>
                     </select>
-                    
-                    <button type="submit" class="bg-green-500 hover:bg-green-600 transition text-white px-6 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Salva Turno</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 transition text-white px-6 py-2 rounded-lg font-bold w-full md:w-auto">Salva Turno</button>
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900">📊 Report e Resoconto Mensile Turni</h3>
-                        <p class="text-sm text-gray-500">Visualizza il conteggio complessivo dei turni assegnati a ciascun dipendente.</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
-                        <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
-                    </div>
+                    <h3 class="text-xl font-bold text-gray-900">📊 Resoconto Mensile Turni Assegnati</h3>
+                    <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
                 </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-3">Dipendente</th>
-                                <th class="p-3">Reparto</th>
-                                <th class="p-3 text-right">Totale Turni nel Mese</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabella-statistiche"></tbody>
-                    </table>
-                </div>
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b bg-gray-100 text-gray-600 text-sm">
+                            <th class="p-3">Dipendente</th>
+                            <th class="p-3">Reparto</th>
+                            <th class="p-3 text-right">Totale Turni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabella-statistiche"></tbody>
+                </table>
             </div>
 
-            <!-- SCHEDA 3 & 4: PROFILO ATTIVITÀ & REPARTI -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
-                    <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
-                    <form id="form-impostazioni" class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">NOME ATTIVITÀ</label>
-                            <input type="text" id="set-nome-business" placeholder="es. Pizzeria Da Mario" required class="w-full border p-2 rounded-lg outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">EMOJI / LOGO</label>
-                            <input type="text" id="set-emoji-business" placeholder="es. 🍕📦" required class="w-full border p-2 rounded-lg outline-none">
-                        </div>
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg w-full transition">Salva Impostazioni</button>
-                    </form>
-                </div>
+        </div>
 
-                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
-                    <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
-                    <form id="form-nuovo-reparto" class="flex gap-2 mb-4">
-                        <input type="text" id="nuovo-reparto-nome" placeholder="Es. Sala, Cassa..." required class="border p-2 rounded-lg outline-none flex-grow">
-                        <label class="flex items-center gap-1 text-xs text-gray-600 font-bold cursor-pointer">
-                            <input type="checkbox" id="nuovo-reparto-veicolo" class="rounded"> Serve Mezzo
-                        </label>
-                        <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg transition">+</button>
-                    </form>
-                    <div class="overflow-y-auto max-h-40 border rounded-lg">
-                        <table class="w-full text-left text-sm">
-                            <tbody id="tabella-reparti"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SCHEDA 5: GESTIONE TEAM -->
-            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600">
-                <h3 class="text-xl font-bold mb-4">👥 Gestione Team e Personale</h3>
-                <form id="form-nuovo-utente" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
-                    <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 rounded-lg outline-none">
-                    <select id="nuovo-ruolo" required class="border p-2 rounded-lg outline-none">
-                        <option value="staff">Staff</option>
-                        <option value="manager">Manager</option>
-                    </select>
-                    
-                    <select id="nuovo-reparto" required class="border p-2 rounded-lg outline-none font-medium">
-                        <option value="">-- Seleziona Reparto --</option>
-                    </select>
-
-                    <input type="password" id="nuova-password" placeholder="Password" required class="border p-2 rounded-lg outline-none">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 rounded-lg transition">+ Dipendente</button>
-                </form>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-2">Nome</th>
-                                <th class="p-2">Ruolo</th>
-                                <th class="p-2">Reparto</th>
-                                <th class="p-2 text-right">Azione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabella-utenti"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SCHEDA 6: GESTIONE MEZZI -->
-            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-600">
-                <h3 class="text-xl font-bold mb-4">🛵 Gestione Flotta Veicoli / Risorse</h3>
-                <form id="form-nuovo-veicolo" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
-                    <input type="text" id="nuovo-veicolo-nome" placeholder="Nome risorsa (es. Scooter 3)" required class="border p-2 rounded-lg outline-none">
-                    <select id="nuovo-veicolo-tipo" required class="border p-2 rounded-lg outline-none">
-                        <option value="Moto">Moto / Scooter</option>
-                        <option value="Auto">Auto</option>
-                        <option value="Attrezzatura">Attrezzatura / Postazione</option>
-                    </select>
-                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold p-2 rounded-lg transition">+ Risorsa</button>
-                </form>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
-                                <th class="p-2">Nome Risorsa</th>
-                                <th class="p-2">Tipologia</th>
-                                <th class="p-2 text-right">Azione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabella-veicoli"></tbody>
-                    </table>
-                </div>
-            </div>
-
+        <!-- NUOVA SEZIONE STAFF (PROPOSTA TURNI) -->
+        <div id="sezione-staff" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600">
+            <h3 class="text-xl font-bold mb-2 flex items-center gap-2">✋ Proponi una tua Disponibilità</h3>
+            <p class="text-sm text-gray-500 mb-4">Invia al manager una proposta per un turno in cui sei disponibile a lavorare.</p>
+            <form id="form-proponi-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
+                <input type="date" id="giorno-proposta" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-green-500">
+                <input type="text" id="orario-proposta" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-green-500">
+                <button type="submit" class="bg-green-500 hover:bg-green-600 transition text-white px-6 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Invia Proposta</button>
+            </form>
         </div>
 
         <!-- BACHECA TURNI (VISIBILE A TUTTI) -->
         <div class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
                 <h3 class="text-xl font-bold">📅 Bacheca e Gestione Turni</h3>
-                
                 <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                     <select id="filtro-reparto" onchange="caricaTurni()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none">
                         <option value="Tutti">🔍 Tutti i Reparti</option>
@@ -202,65 +97,37 @@
                     </label>
                 </div>
             </div>
-
             <div id="lista-turni" class="flex flex-col gap-4"></div>
         </div>
     </div>
 
-    <!-- JAVASCRIPT APP -->
     <script>
         let utenteLoggato = null; 
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
         let listaRepartiGlobal = [];
 
-        // Imposta il mese corrente nel selettore (YYYY-MM)
         const oggi = new Date();
-        const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
-        document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
+        document.getElementById('selettore-mese-stats').value = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
 
         function caricaImpostazioni() {
             return fetch('/api/impostazioni').then(res => res.json()).then(data => {
                 const titolo = `${data.nome_business || 'Gestionale Turni'} ${data.emoji_business || ''}`;
                 document.getElementById('header-business').textContent = titolo;
                 document.getElementById('page-title').textContent = titolo;
-                document.getElementById('set-nome-business').value = data.nome_business || '';
-                document.getElementById('set-emoji-business').value = data.emoji_business || '';
             });
         }
 
         function caricaReparti() {
             return fetch('/api/reparti').then(res => res.json()).then(reparti => {
                 listaRepartiGlobal = reparti;
-                const selectReparto = document.getElementById('nuovo-reparto');
                 const filtroReparto = document.getElementById('filtro-reparto');
-                const tabellaReparti = document.getElementById('tabella-reparti');
-                
-                selectReparto.innerHTML = '<option value="">-- Seleziona Reparto --</option>';
                 filtroReparto.innerHTML = '<option value="Tutti">🔍 Tutti i Reparti</option>';
-                tabellaReparti.innerHTML = '';
-
                 reparti.forEach(r => {
-                    const option = document.createElement('option');
-                    option.value = r.nome;
-                    option.textContent = r.nome;
-                    selectReparto.appendChild(option);
-
                     const optionFiltro = document.createElement('option');
                     optionFiltro.value = r.nome;
                     optionFiltro.textContent = `Reparto: ${r.nome}`;
                     filtroReparto.appendChild(optionFiltro);
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">${r.nome}</td>
-                        <td class="p-2 text-xs text-gray-500">${r.richiede_veicolo ? '🛵 Mezzo richiesto' : '-'}</td>
-                        <td class="p-2 text-right">
-                            <button onclick="eliminaReparto(${r.id})" class="text-red-500 hover:text-red-700 font-bold">🗑️</button>
-                        </td>
-                    `;
-                    tabellaReparti.appendChild(tr);
                 });
             });
         }
@@ -270,11 +137,9 @@
                 listaUtentiGlobal = utenti;
                 const loginSelect = document.getElementById('login-select');
                 const selettoreDipendente = document.getElementById('selettore-dipendente');
-                const tabellaUtenti = document.getElementById('tabella-utenti');
                 
                 loginSelect.innerHTML = '<option value="">-- Chi sei? --</option>';
                 selettoreDipendente.innerHTML = '<option value="">-- Scegli dipendente --</option>';
-                tabellaUtenti.innerHTML = '';
 
                 utenti.forEach(utente => {
                     const optionLogin = document.createElement('option');
@@ -291,18 +156,6 @@
                         optionTurno.textContent = `${utente.nome} (${utente.reparto})`;
                         selettoreDipendente.appendChild(optionTurno);
                     }
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">${utente.nome}</td>
-                        <td class="p-2"><span class="px-2 py-1 rounded text-xs font-bold ${utente.ruolo === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}">${utente.ruolo}</span></td>
-                        <td class="p-2 text-sm text-gray-600">${utente.reparto || '-'}</td>
-                        <td class="p-2 text-right">
-                            ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500 hover:text-red-700 text-sm font-bold">🗑️ Rimuovi</button>` : '<span class="text-xs text-gray-400">Tu</span>'}
-                        </td>
-                    `;
-                    tabellaUtenti.appendChild(tr);
                 });
             });
         }
@@ -311,27 +164,12 @@
             return fetch('/api/veicoli').then(res => res.json()).then(veicoli => {
                 listaVeicoliGlobal = veicoli;
                 const selettoreVeicolo = document.getElementById('selettore-veicolo');
-                const tabellaVeicoli = document.getElementById('tabella-veicoli');
-                
                 selettoreVeicolo.innerHTML = '<option value="">-- Nessun Mezzo/Risorsa --</option>';
-                tabellaVeicoli.innerHTML = '';
-
                 veicoli.forEach(v => {
                     const option = document.createElement('option');
                     option.value = v.id;
                     option.textContent = `🚗 ${v.nome} (${v.tipo})`;
                     selettoreVeicolo.appendChild(option);
-
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-2 font-bold">🛵 ${v.nome}</td>
-                        <td class="p-2 text-sm text-gray-600">${v.tipo}</td>
-                        <td class="p-2 text-right">
-                            <button onclick="eliminaVeicolo(${v.id})" class="text-red-500 hover:text-red-700 text-sm font-bold">🗑️ Rimuovi</button>
-                        </td>
-                    `;
-                    tabellaVeicoli.appendChild(tr);
                 });
             });
         }
@@ -339,63 +177,21 @@
         function caricaStatisticheMensili() {
             const mese = document.getElementById('selettore-mese-stats').value;
             if(!mese) return;
-
             fetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
-                if(stats.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-gray-500">Nessun turno registrato per questo mese.</td></tr>`;
-                    return;
-                }
                 stats.forEach(s => {
                     const tr = document.createElement('tr');
                     tr.className = "border-b hover:bg-gray-50";
-                    tr.innerHTML = `
-                        <td class="p-3 font-bold">${s.nome}</td>
-                        <td class="p-3 text-sm text-gray-600">${s.reparto}</td>
-                        <td class="p-3 text-right"><span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full">${s.totale_turni} turni</span></td>
-                    `;
+                    tr.innerHTML = `<td class="p-3 font-bold">${s.nome}</td><td class="p-3 text-sm text-gray-600">${s.reparto}</td><td class="p-3 text-right"><span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full">${s.totale_turni} turni</span></td>`;
                     tbody.appendChild(tr);
                 });
             });
         }
 
         caricaImpostazioni();
-        caricaReparti().then(() => {
-            caricaUtenti();
-            caricaVeicoli();
-        });
+        caricaReparti().then(() => { caricaUtenti(); caricaVeicoli(); });
 
-        document.getElementById('form-impostazioni').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const body = {
-                nome_business: document.getElementById('set-nome-business').value,
-                emoji_business: document.getElementById('set-emoji-business').value
-            };
-            fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(() => caricaImpostazioni());
-        });
-
-        document.getElementById('form-nuovo-reparto').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovo = {
-                nome: document.getElementById('nuovo-reparto-nome').value,
-                richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked
-            };
-            fetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovo) }).then(() => {
-                caricaReparti().then(() => caricaUtenti());
-                document.getElementById('form-nuovo-reparto').reset();
-            });
-        });
-
-        window.eliminaReparto = function(id) {
-            if(confirm("Eliminare questo reparto?")) {
-                fetch(`/api/reparti/${id}`, { method: 'DELETE' }).then(() => {
-                    caricaReparti().then(() => caricaUtenti());
-                });
-            }
-        };
-
-        // GESTIONE LOGIN
         document.getElementById('form-login').addEventListener('submit', function(event) {
             event.preventDefault();
             const idUtente = document.getElementById('login-select').value;
@@ -416,14 +212,14 @@
                     
                     if(utenteLoggato.ruolo === 'manager') {
                         document.getElementById('sezione-manager').classList.remove('hidden');
+                        document.getElementById('sezione-staff').classList.add('hidden');
                         caricaStatisticheMensili();
                     } else {
                         document.getElementById('sezione-manager').classList.add('hidden');
+                        document.getElementById('sezione-staff').classList.remove('hidden');
                     }
                     
                     document.getElementById('login-password').value = '';
-                    caricaUtenti();
-                    caricaVeicoli();
                     caricaTurni();
                 } else {
                     alert(data.message);
@@ -436,52 +232,9 @@
             document.getElementById('form-login').classList.remove('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('contenuto-app').classList.add('hidden');
+            document.getElementById('sezione-manager').classList.add('hidden');
+            document.getElementById('sezione-staff').classList.add('hidden');
             document.getElementById('login-select').value = '';
-        };
-
-        document.getElementById('form-nuovo-utente').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovo = {
-                nome: document.getElementById('nuovo-nome').value,
-                ruolo: document.getElementById('nuovo-ruolo').value,
-                reparto: document.getElementById('nuovo-reparto').value,
-                password: document.getElementById('nuova-password').value
-            };
-            fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovo) }).then(() => {
-                caricaUtenti();
-                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
-                document.getElementById('form-nuovo-utente').reset();
-            });
-        });
-
-        window.eliminaUtente = function(id) {
-            if(confirm("Rimuovere questo dipendente?")) {
-                fetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => {
-                    caricaUtenti();
-                    if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
-                });
-            }
-        };
-
-        document.getElementById('form-nuovo-veicolo').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const nuovoV = {
-                nome: document.getElementById('nuovo-veicolo-nome').value,
-                tipo: document.getElementById('nuovo-veicolo-tipo').value
-            };
-            fetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoV) }).then(() => {
-                caricaVeicoli();
-                document.getElementById('form-nuovo-veicolo').reset();
-            });
-        });
-
-        window.eliminaVeicolo = function(id) {
-            if(confirm("Eliminare questa risorsa?")) {
-                fetch(`/api/veicoli/${id}`, { method: 'DELETE' }).then(() => {
-                    caricaVeicoli();
-                    caricaTurni();
-                });
-            }
         };
 
         window.controllaReparto = function() {
@@ -504,7 +257,6 @@
 
         function caricaTurni() {
             if (!utenteLoggato) return;
-            
             const filtroRepartoVal = document.getElementById('filtro-reparto').value;
             const soloMiei = document.getElementById('filtro-miei').checked;
 
@@ -518,17 +270,13 @@
                     return matchReparto && matchMiei;
                 });
 
-                if(turniFiltrati.length === 0) {
-                    lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato.</div>`;
-                    return;
-                }
-
                 turniFiltrati.forEach(turno => {
                     const div = document.createElement('div');
                     let colorClass = "";
-                    if(turno.stato === 'assegnato') colorClass = "border-blue-500 bg-blue-50";
-                    else if(turno.stato === 'in_scambio') colorClass = "border-orange-500 bg-orange-50";
-                    else if(turno.stato === 'in_approvazione') colorClass = "border-pink-500 bg-pink-50";
+                    if (turno.stato === 'assegnato') colorClass = "border-blue-500 bg-blue-50";
+                    else if (turno.stato === 'in_scambio') colorClass = "border-orange-500 bg-orange-50";
+                    else if (turno.stato === 'in_approvazione') colorClass = "border-pink-500 bg-pink-50";
+                    else if (turno.stato === 'proposto') colorClass = "border-teal-500 bg-teal-50"; // Nuova colorazione per proposte
 
                     div.className = `p-4 rounded-lg border-l-4 ${colorClass} flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm`;
                     
@@ -536,9 +284,8 @@
                     let testoTurno = `<div class="text-lg mb-1"><span class="font-black">${turno.giorno}</span> <span class="text-gray-600">(${turno.orario})</span></div> 
                                       <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong> <span class="text-sm text-gray-500">(${turno.reparto})</span></div>`;
                     
-                    if (utenteLoggato.ruolo === 'manager') {
-                        let selectVeicoloHtml = `<div class="mt-2 text-sm flex items-center gap-2">🛵 Risorsa/Mezzo: <select onchange="aggiornaVeicoloTurno(${turno.id}, this.value)" class="text-xs p-1 border rounded bg-white">`;
-                        selectVeicoloHtml += `<option value="">-- Nessuno --</option>`;
+                    if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto') {
+                        let selectVeicoloHtml = `<div class="mt-2 text-sm flex items-center gap-2">🛵 Mezzo: <select onchange="aggiornaVeicoloTurno(${turno.id}, this.value)" class="text-xs p-1 border rounded bg-white"><option value="">-- Nessuno --</option>`;
                         listaVeicoliGlobal.forEach(v => {
                             const isSelected = turno.veicolo_id === v.id ? 'selected' : '';
                             selectVeicoloHtml += `<option value="${v.id}" ${isSelected}>${v.nome} (${v.tipo})</option>`;
@@ -546,14 +293,12 @@
                         selectVeicoloHtml += `</select></div>`;
                         testoTurno += selectVeicoloHtml;
                     } else if(turno.nome_veicolo) {
-                        testoTurno += `<div class="text-gray-800 mt-1">🛵 Risorsa/Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
+                        testoTurno += `<div class="text-gray-800 mt-1">🛵 Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
                     }
                     
-                    if(turno.stato === 'in_approvazione') {
-                        testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto per questo turno!</div>`;
-                    } else {
-                        testoTurno += `<div class="mt-2 text-gray-500 text-xs uppercase tracking-wider font-bold">Stato: ${turno.stato.replace('_', ' ')}</div>`;
-                    }
+                    if (turno.stato === 'in_approvazione') testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si propone per scambiare!</div>`;
+                    else if (turno.stato === 'proposto') testoTurno += `<div class="mt-2 text-teal-700 text-sm font-bold">✋ Turno proposto in attesa di approvazione</div>`;
+                    else testoTurno += `<div class="mt-2 text-gray-500 text-xs uppercase tracking-wider font-bold">Stato: ${turno.stato.replace('_', ' ')}</div>`;
                     
                     info.innerHTML = testoTurno;
                     
@@ -562,17 +307,20 @@
                     
                     if (utenteLoggato.ruolo === 'manager') {
                         if (turno.stato === 'in_approvazione') {
-                            bloccoBottoni.innerHTML = `
-                                <button class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="approvaScambio(${turno.id})">✅ Approva</button> 
-                                <button class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
+                            bloccoBottoni.innerHTML += `<button class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="approvaScambio(${turno.id})">✅ Approva</button> 
+                                                        <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
+                        } else if (turno.stato === 'proposto') {
+                            bloccoBottoni.innerHTML += `<button class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded font-bold text-sm shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">✅ Approva Proposta</button>`;
                         }
+                        // Il manager può sempre eliminare qualsiasi turno
+                        bloccoBottoni.innerHTML += `<button class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm ml-auto" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
                     } else {
                         if (turno.stato === 'assegnato' && turno.utente_id === utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
+                            bloccoBottoni.innerHTML = `<button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
                         } else if (turno.stato === 'in_scambio' && turno.utente_id !== utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<button class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition w-full md:w-auto" onclick="inviaProposta(${turno.id})">✋ Mi Propongo</button>`;
-                        } else if (turno.stato === 'in_approvazione' && turno.sostituto_id === utenteLoggato.id) {
-                            bloccoBottoni.innerHTML = `<span class="bg-white px-4 py-2 rounded border border-gray-300 text-gray-500 text-sm font-bold w-full text-center">⏳ In attesa...</span>`;
+                            bloccoBottoni.innerHTML = `<button class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm" onclick="inviaProposta(${turno.id})">✋ Mi Propongo</button>`;
+                        } else if (turno.stato === 'proposto' && turno.utente_id === utenteLoggato.id) {
+                            bloccoBottoni.innerHTML = `<button class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm" onclick="eliminaTurno(${turno.id})">Annulla Proposta</button>`;
                         }
                     }
 
@@ -583,7 +331,7 @@
             });
         }
 
-        // SALVA TURNO CON RICORRENZA
+        // SALVATAGGIO TURNI DA PARTE DEL MANAGER
         document.getElementById('form-turno').addEventListener('submit', function(event) {
             event.preventDefault();
             const selettore = document.getElementById('selettore-dipendente');
@@ -595,14 +343,11 @@
                 utente_id: selettore.value,
                 reparto: selettore.options[selettore.selectedIndex].dataset.reparto,
                 veicolo_id: document.getElementById('selettore-veicolo').value || null,
-                settimane: document.getElementById('settimane-ricorrenza').value
+                settimane: document.getElementById('settimane-ricorrenza').value,
+                stato: 'assegnato' // Il manager assegna direttamente
             };
 
-            fetch('/api/turni', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(nuovoTurno) 
-            }).then(() => {
+            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoTurno) }).then(() => {
                 caricaTurni();
                 if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
                 document.getElementById('form-turno').reset(); 
@@ -610,13 +355,44 @@
             });
         });
 
-        window.cambiaStato = function(idTurno, nuovoStato) { fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: nuovoStato }) }).then(() => caricaTurni()); };
-        window.inviaProposta = function(idTurno) { fetch(`/api/turni/${idTurno}/proponi`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sostituto_id: utenteLoggato.id }) }).then(() => caricaTurni()); };
-        window.approvaScambio = function(idTurno) { 
-            fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(() => {
+        // SALVATAGGIO TURNI DA PARTE DELLO STAFF (PROPOSTA)
+        document.getElementById('form-proponi-turno').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const turnoProposto = {
+                giorno: document.getElementById('giorno-proposta').value,
+                orario: document.getElementById('orario-proposta').value,
+                utente_id: utenteLoggato.id,
+                reparto: utenteLoggato.reparto,
+                veicolo_id: null,
+                settimane: 1,
+                stato: 'proposto' // Lo staff invia solo proposte
+            };
+
+            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(turnoProposto) }).then(() => {
                 caricaTurni();
-                if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
-            }); 
+                document.getElementById('form-proponi-turno').reset(); 
+            });
+        });
+
+        window.cambiaStato = function(idTurno, nuovoStato) { 
+            fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: nuovoStato }) })
+            .then(() => { caricaTurni(); if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili(); }); 
+        };
+        
+        window.inviaProposta = function(idTurno) { fetch(`/api/turni/${idTurno}/proponi`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sostituto_id: utenteLoggato.id }) }).then(() => caricaTurni()); };
+        
+        window.approvaScambio = function(idTurno) { 
+            fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(() => { caricaTurni(); if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili(); }); 
+        };
+
+        // FUNZIONE PER ELIMINARE DEFINITIVAMENTE UN TURNO
+        window.eliminaTurno = function(idTurno) {
+            if(confirm("Sei sicuro di voler eliminare questo turno definitivamente?")) {
+                fetch(`/api/turni/${idTurno}`, { method: 'DELETE' }).then(() => {
+                    caricaTurni();
+                    if(utenteLoggato?.ruolo === 'manager') caricaStatisticheMensili();
+                });
+            }
         };
     </script>
 </body>

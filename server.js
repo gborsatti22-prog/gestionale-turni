@@ -54,51 +54,10 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
                 FOREIGN KEY(sostituto_id) REFERENCES Utenti(id),
                 FOREIGN KEY(veicolo_id) REFERENCES Veicoli(id)
             )`);
-
-            // Popola dati iniziali se il DB è vuoto
-            db.get("SELECT COUNT(*) AS count FROM Impostazioni", (err, row) => {
-                if (row && row.count === 0) {
-                    db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('nome_business', 'Gestionale Turni')");
-                    db.run("INSERT INTO Impostazioni (chiave, valore) VALUES ('emoji_business', '🍔🛵')");
-                }
-            });
-
-            db.get("SELECT COUNT(*) AS count FROM Reparti", (err, row) => {
-                if (row && row.count === 0) {
-                    const insertR = db.prepare("INSERT INTO Reparti (nome, richiede_veicolo) VALUES (?, ?)");
-                    insertR.run("Delivery", 1);
-                    insertR.run("Sala", 0);
-                    insertR.run("Cucina", 0);
-                    insertR.run("Bar", 0);
-                    insertR.run("Cassa", 0);
-                    insertR.finalize();
-                }
-            });
-
-            db.get("SELECT COUNT(*) AS count FROM Utenti", (err, row) => {
-                if (row && row.count === 0) {
-                    const insertU = db.prepare("INSERT INTO Utenti (nome, ruolo, reparto, password) VALUES (?, ?, ?, ?)");
-                    insertU.run("Titolare", "manager", "Tutti", "admin123");
-                    insertU.run("Marco", "staff", "Delivery", "staff123");
-                    insertU.run("Sara", "staff", "Sala", "staff123");
-                    insertU.finalize();
-                }
-            });
-
-            db.get("SELECT COUNT(*) AS count FROM Veicoli", (err, row) => {
-                if (row && row.count === 0) {
-                    const insertV = db.prepare("INSERT INTO Veicoli (nome, tipo) VALUES (?, ?)");
-                    insertV.run("Panda Rossa", "Auto");
-                    insertV.run("Scooter 1", "Moto");
-                    insertV.run("Scooter 2", "Moto");
-                    insertV.finalize();
-                }
-            });
         });
     }
 });
 
-// Calcola le date successive mantenendo il formato YYYY-MM-DD
 function calcolaDataFutura(dateStr, numSettimane) {
     const [year, month, day] = dateStr.split('-').map(Number);
     const d = new Date(year, month - 1, day);
@@ -111,13 +70,13 @@ function calcolaDataFutura(dateStr, numSettimane) {
 
 // --- API STATISTICHE MENSILI ---
 app.get('/api/statistiche/mensili', (req, res) => {
-    const mese = req.query.mese; // Formato YYYY-MM
+    const mese = req.query.mese; 
     if (!mese) return res.status(400).json({ error: "Seleziona un mese valido" });
 
     const query = `
         SELECT Utenti.id, Utenti.nome, Utenti.reparto, COUNT(Turni.id) AS totale_turni
         FROM Utenti
-        LEFT JOIN Turni ON Utenti.id = Turni.utente_id AND strftime('%Y-%m', Turni.giorno) = ?
+        LEFT JOIN Turni ON Utenti.id = Turni.utente_id AND strftime('%Y-%m', Turni.giorno) = ? AND Turni.stato = 'assegnato'
         WHERE Utenti.ruolo != 'manager'
         GROUP BY Utenti.id
     `;
@@ -143,51 +102,30 @@ app.put('/api/impostazioni', (req, res) => {
         if (nome_business) db.run("UPDATE Impostazioni SET valore = ? WHERE chiave = 'nome_business'", [nome_business]);
         if (emoji_business) db.run("UPDATE Impostazioni SET valore = ? WHERE chiave = 'emoji_business'", [emoji_business]);
     });
-    res.json({ success: true, message: "Impostazioni aggiornate!" });
+    res.json({ success: true });
 });
 
 // --- API REPARTI ---
-app.get('/api/reparti', (req, res) => {
-    db.all("SELECT * FROM Reparti", [], (err, rows) => res.json(rows));
-});
-
+app.get('/api/reparti', (req, res) => db.all("SELECT * FROM Reparti", [], (err, rows) => res.json(rows)));
 app.post('/api/reparti', (req, res) => {
     const { nome, richiede_veicolo } = req.body;
-    if (!nome) return res.status(400).json({ error: "Inserisci il nome del reparto!" });
     db.run("INSERT INTO Reparti (nome, richiede_veicolo) VALUES (?, ?)", [nome, richiede_veicolo ? 1 : 0], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID, message: "Reparto aggiunto!" });
+        res.json({ id: this.lastID });
     });
 });
-
-app.delete('/api/reparti/:id', (req, res) => {
-    db.run("DELETE FROM Reparti WHERE id = ?", [req.params.id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Reparto eliminato!" });
-    });
-});
+app.delete('/api/reparti/:id', (req, res) => db.run("DELETE FROM Reparti WHERE id = ?", [req.params.id], () => res.json({ success: true })));
 
 // --- API UTENTI ---
-app.get('/api/utenti', (req, res) => {
-    db.all("SELECT id, nome, ruolo, reparto FROM Utenti", [], (err, rows) => res.json(rows));
-});
-
+app.get('/api/utenti', (req, res) => db.all("SELECT id, nome, ruolo, reparto FROM Utenti", [], (err, rows) => res.json(rows)));
 app.post('/api/utenti', (req, res) => {
     const { nome, ruolo, reparto, password } = req.body;
-    if (!nome || !ruolo || !password) return res.status(400).json({ error: "Compila tutti i campi!" });
-    db.run(`INSERT INTO Utenti (nome, ruolo, reparto, password) VALUES (?, ?, ?, ?)`, 
-        [nome, ruolo, reparto || 'Generale', password], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, message: "Utente creato!" });
-    });
-});
-
-app.delete('/api/utenti/:id', (req, res) => {
-    db.run(`DELETE FROM Utenti WHERE id = ?`, [req.params.id], function(err) {
+    db.run(`INSERT INTO Utenti (nome, ruolo, reparto, password) VALUES (?, ?, ?, ?)`, [nome, ruolo, reparto || 'Generale', password], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Utente rimosso!" });
+        res.json({ id: this.lastID });
     });
 });
+app.delete('/api/utenti/:id', (req, res) => db.run(`DELETE FROM Utenti WHERE id = ?`, [req.params.id], () => res.json({ success: true })));
 
 // --- API LOGIN ---
 app.post('/api/login', (req, res) => {
@@ -200,42 +138,33 @@ app.post('/api/login', (req, res) => {
 });
 
 // --- API VEICOLI ---
-app.get('/api/veicoli', (req, res) => {
-    db.all("SELECT * FROM Veicoli", [], (err, rows) => res.json(rows));
-});
-
+app.get('/api/veicoli', (req, res) => db.all("SELECT * FROM Veicoli", [], (err, rows) => res.json(rows)));
 app.post('/api/veicoli', (req, res) => {
     const { nome, tipo } = req.body;
-    if (!nome || !tipo) return res.status(400).json({ error: "Compila tutti i campi!" });
     db.run(`INSERT INTO Veicoli (nome, tipo) VALUES (?, ?)`, [nome, tipo], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID, message: "Veicolo aggiunto!" });
+        res.json({ id: this.lastID });
     });
 });
+app.delete('/api/veicoli/:id', (req, res) => db.run(`DELETE FROM Veicoli WHERE id = ?`, [req.params.id], () => res.json({ success: true })));
 
-app.delete('/api/veicoli/:id', (req, res) => {
-    db.run(`DELETE FROM Veicoli WHERE id = ?`, [req.params.id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Veicolo rimosso!" });
-    });
-});
-
-// --- API TURNI (CON SUPPORTO A TURNI RICORRENTI) ---
+// --- API TURNI ---
 app.post('/api/turni', (req, res) => {
-    const { giorno, orario, utente_id, reparto, veicolo_id, settimane } = req.body;
+    const { giorno, orario, utente_id, reparto, veicolo_id, settimane, stato } = req.body;
     const numSettimane = Math.max(1, parseInt(settimane) || 1);
+    const statoTurno = stato || 'assegnato'; 
     
-    const query = `INSERT INTO Turni (giorno, orario, utente_id, reparto, veicolo_id, stato) VALUES (?, ?, ?, ?, ?, 'assegnato')`;
+    const query = `INSERT INTO Turni (giorno, orario, utente_id, reparto, veicolo_id, stato) VALUES (?, ?, ?, ?, ?, ?)`;
     
     db.serialize(() => {
         const stmt = db.prepare(query);
         for (let i = 0; i < numSettimane; i++) {
             const dataTurno = calcolaDataFutura(giorno, i);
-            stmt.run([dataTurno, orario, utente_id, reparto, veicolo_id || null]);
+            stmt.run([dataTurno, orario, utente_id, reparto, veicolo_id || null, statoTurno]);
         }
         stmt.finalize((err) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: `${numSettimane} turni creati con successo!` });
+            res.json({ success: true });
         });
     });
 });
@@ -255,26 +184,17 @@ app.get('/api/turni', (req, res) => {
     db.all(query, [], (err, rows) => res.json(rows));
 });
 
-app.put('/api/turni/:id/veicolo', (req, res) => {
-    const { veicolo_id } = req.body;
-    db.run(`UPDATE Turni SET veicolo_id = ? WHERE id = ?`, [veicolo_id || null, req.params.id], (err) => {
+// Aggiunto l'endpoint per eliminare un turno
+app.delete('/api/turni/:id', (req, res) => {
+    db.run(`DELETE FROM Turni WHERE id = ?`, [req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: "Veicolo aggiornato!" });
+        res.json({ success: true });
     });
 });
 
-app.put('/api/turni/:id/stato', (req, res) => {
-    db.run(`UPDATE Turni SET stato = ? WHERE id = ?`, [req.body.stato, req.params.id], () => res.json({ success: true }));
-});
+app.put('/api/turni/:id/veicolo', (req, res) => db.run(`UPDATE Turni SET veicolo_id = ? WHERE id = ?`, [req.body.veicolo_id || null, req.params.id], () => res.json({ success: true })));
+app.put('/api/turni/:id/stato', (req, res) => db.run(`UPDATE Turni SET stato = ? WHERE id = ?`, [req.body.stato, req.params.id], () => res.json({ success: true })));
+app.put('/api/turni/:id/proponi', (req, res) => db.run(`UPDATE Turni SET stato = 'in_approvazione', sostituto_id = ? WHERE id = ?`, [req.body.sostituto_id, req.params.id], () => res.json({ success: true })));
+app.put('/api/turni/:id/approva', (req, res) => db.run(`UPDATE Turni SET utente_id = sostituto_id, sostituto_id = NULL, stato = 'assegnato' WHERE id = ?`, [req.params.id], () => res.json({ success: true })));
 
-app.put('/api/turni/:id/proponi', (req, res) => {
-    db.run(`UPDATE Turni SET stato = 'in_approvazione', sostituto_id = ? WHERE id = ?`, [req.body.sostituto_id, req.params.id], () => res.json({ success: true }));
-});
-
-app.put('/api/turni/:id/approva', (req, res) => {
-    db.run(`UPDATE Turni SET utente_id = sostituto_id, sostituto_id = NULL, stato = 'assegnato' WHERE id = ?`, [req.params.id], () => res.json({ success: true }));
-});
-
-app.listen(PORT, () => {
-    console.log(`🚀 Server attivo sulla porta ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server attivo sulla porta ${PORT}`));
