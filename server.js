@@ -192,6 +192,18 @@ app.delete('/api/turni/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ---> NUOVA: MODIFICA DI UN TURNO ESISTENTE (Titolare) <---
+app.put('/api/turni/:id', async (req, res) => {
+    try {
+        const { giorno, orario, utente_id, reparto, veicolo_id } = req.body;
+        await pool.query(
+            "UPDATE turni SET giorno = $1, orario = $2, utente_id = $3, reparto = $4, veicolo_id = $5 WHERE id = $6", 
+            [giorno, orario, utente_id, reparto, veicolo_id, req.params.id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.put('/api/turni/:id/stato', async (req, res) => {
     try {
         await pool.query("UPDATE turni SET stato = $1 WHERE id = $2", [req.body.stato, req.params.id]);
@@ -220,22 +232,60 @@ app.put('/api/turni/:id/approva', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// STATISTICHE MENSILI
+
+// ---> NUOVA: STATISTICHE MENSILI CON CALCOLO ORE LORDE <---
+
+// Funzione helper per calcolare le ore da una stringa (es. "08:00 - 14:30")
+function calcolaOreTurno(orarioStr) {
+    if (!orarioStr || !orarioStr.includes('-')) return 0;
+    
+    try {
+        const [inizio, fine] = orarioStr.split('-').map(s => s.trim());
+        const [hInizio, mInizio] = inizio.split(':').map(Number);
+        const [hFine, mFine] = fine.split(':').map(Number);
+
+        let dataInizio = new Date(2000, 0, 1, hInizio, mInizio || 0);
+        let dataFine = new Date(2000, 0, 1, hFine, mFine || 0);
+
+        // Se il turno finisce il giorno dopo (es. 22:00 - 06:00)
+        if (dataFine < dataInizio) dataFine.setDate(dataFine.getDate() + 1);
+
+        const diffMs = dataFine - dataInizio;
+        return diffMs / (1000 * 60 * 60); // Converte i millisecondi in ore decimali
+    } catch (e) {
+        return 0; // Se l'orario non è un range standard (es. "Mattina"), calcola 0 ore
+    }
+}
+
 app.get('/api/statistiche/mensili', async (req, res) => {
     try {
         const mese = req.query.mese; // Formato YYYY-MM
         const query = `
-            SELECT u.nome, u.reparto, COUNT(t.id) as totale_turni
+            SELECT u.id, u.nome, u.reparto, t.orario
             FROM utenti u
             LEFT JOIN turni t ON u.id = t.utente_id 
                 AND t.giorno LIKE $1
                 AND t.stato = 'assegnato'
             WHERE u.ruolo != 'manager'
-            GROUP BY u.id, u.nome, u.reparto
-            ORDER BY totale_turni DESC
         `;
         const result = await pool.query(query, [`${mese}-%`]);
-        res.json(result.rows);
+        
+        const statistiche = {};
+        
+        // Raggruppiamo i dati per utente ed eseguiamo la somma in JavaScript
+        result.rows.forEach(row => {
+            if (!statistiche[row.id]) {
+                statistiche[row.id] = { nome: row.nome, reparto: row.reparto, totale_turni: 0, totale_ore: 0 };
+            }
+            if (row.orario) { // Se è stato trovato un turno assegnato a questo utente
+                statistiche[row.id].totale_turni += 1;
+                statistiche[row.id].totale_ore += calcolaOreTurno(row.orario);
+            }
+        });
+
+        // Trasformiamo l'oggetto in un array ordinato per turni totali
+        const statsArray = Object.values(statistiche).sort((a, b) => b.totale_turni - a.totale_turni);
+        res.json(statsArray);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

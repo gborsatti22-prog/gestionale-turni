@@ -61,7 +61,7 @@
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI -->
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div>
@@ -78,7 +78,8 @@
                             <tr class="border-b bg-gray-100 text-gray-600 text-sm">
                                 <th class="p-3">Dipendente</th>
                                 <th class="p-3">Reparto</th>
-                                <th class="p-3 text-right">Totale Turni nel Mese</th>
+                                <th class="p-3 text-center">Totale Turni nel Mese</th>
+                                <th class="p-3 text-right text-indigo-600">Ore Lavorate</th>
                             </tr>
                         </thead>
                         <tbody id="tabella-statistiche"></tbody>
@@ -315,14 +316,24 @@
             fetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
-                stats.forEach(s => tbody.innerHTML += `<tr class="border-b"><td class="p-3 font-bold">${s.nome}</td><td class="p-3">${s.reparto}</td><td class="p-3 text-right"><b>${s.totale_turni}</b></td></tr>`);
+                stats.forEach(s => {
+                    const oreText = s.totale_ore ? s.totale_ore.toFixed(1) : 0;
+                    tbody.innerHTML += `
+                        <tr class="border-b">
+                            <td class="p-3 font-bold">${s.nome}</td>
+                            <td class="p-3">${s.reparto}</td>
+                            <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
+                            <td class="p-3 text-right text-indigo-700 font-bold">${oreText} h</td>
+                        </tr>
+                    `;
+                });
             });
         }
 
         caricaImpostazioni();
         caricaReparti().then(() => { caricaUtenti(); caricaVeicoli(); });
 
-        // LISTENER FORM SETUP MANAGER (Sintetizzati per brevità)
+        // LISTENER FORM SETUP MANAGER
         document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
         document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); fetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
         document.getElementById('form-nuovo-utente').addEventListener('submit', e => { e.preventDefault(); fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value }) }).then(() => { caricaUtenti(); e.target.reset(); }); });
@@ -432,6 +443,9 @@
                 if (utenteLoggato.ruolo === 'manager') {
                     if (turno.stato === 'in_approvazione') btn.innerHTML += `<button class="bg-green-500 text-white px-3 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'approva')">✅ Approva</button><button class="bg-red-500 text-white px-3 py-1 rounded" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
                     else if (turno.stato === 'proposto') btn.innerHTML += `<button class="bg-teal-600 text-white px-4 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">✅ Approva</button>`;
+                    
+                    // NUOVO TASTO MODIFICA (SOLO MANAGER)
+                    btn.innerHTML += `<button class="bg-blue-500 text-white px-3 py-1 rounded shadow-sm" onclick="modificaTurno(${turno.id})">✏️ Modifica</button>`;
                     btn.innerHTML += `<button class="bg-gray-800 text-white px-3 py-1 rounded shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️</button>`;
                 } else {
                     if (turno.stato === 'assegnato' && turno.utente_id === utenteLoggato.id) btn.innerHTML = `<button class="bg-orange-500 text-white px-4 py-1 rounded" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
@@ -536,21 +550,46 @@
             e.preventDefault();
             fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                 giorno: document.getElementById('giorno-assenza').value, 
-                orario: document.getElementById('motivo-assenza').value, // Usiamo il campo orario per salvare il motivo!
+                orario: document.getElementById('motivo-assenza').value, 
                 utente_id: utenteLoggato.id, 
                 reparto: 'Assente', veicolo_id: null, settimane: 1, stato: 'indisponibile' 
             })}).then(() => { caricaTurni(); e.target.reset(); });
         });
 
+        // FUNZIONI DI MODIFICA
+        window.modificaTurno = async function(idTurno) {
+            const turno = turniGlobal.find(t => t.id === idTurno);
+            if (!turno) return;
+            
+            const nuovoOrario = prompt(`Modifica orario per ${turno.nome_proprietario} del ${turno.giorno}:`, turno.orario);
+            
+            // Se l'utente clicca Annulla o lascia vuoto, non fare nulla
+            if (nuovoOrario === null || nuovoOrario.trim() === "" || nuovoOrario === turno.orario) return;
+
+            fetch(`/api/turni/${turno.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    giorno: turno.giorno,
+                    orario: nuovoOrario,
+                    utente_id: turno.utente_id,
+                    reparto: turno.reparto,
+                    veicolo_id: turno.veicolo_id
+                })
+            }).then(() => {
+                caricaTurni();
+                caricaStatisticheMensili();
+            });
+        };
+
         window.cambiaStato = (idTurno, azione) => { 
             if(azione === 'approva') fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(caricaTurni);
             else fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: azione }) }).then(caricaTurni); 
         };
-        window.eliminaTurno = id => confirm("Eliminare definitivamente?") && fetch(`/api/turni/${id}`, { method: 'DELETE' }).then(caricaTurni);
+        window.eliminaTurno = id => confirm("Eliminare definitivamente?") && fetch(`/api/turni/${id}`, { method: 'DELETE' }).then(() => { caricaTurni(); caricaStatisticheMensili(); });
     </script>
     
     <style>
-        /* Nasconde la scrollbar in eccesso per le caselline del calendario ma permette lo scroll touch */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
