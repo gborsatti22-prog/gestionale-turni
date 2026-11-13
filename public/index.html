@@ -89,7 +89,7 @@
 
             <!-- SCHEDA 3 & 4: PROFILO & REPARTI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- (Identico a prima) -->
+                <!-- Profilo Attività -->
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
                     <form id="form-impostazioni" class="space-y-3">
@@ -390,7 +390,7 @@
             });
         }
 
-        // VISTA A LISTA CLASSICA
+        // VISTA A LISTA CLASSICA (CON FIX TENDINA MEZZI)
         function renderLista(turniFiltrati) {
             const lista = document.getElementById('lista-turni');
             lista.innerHTML = ''; 
@@ -428,11 +428,17 @@
                 let testoTurno = `<div class="text-lg mb-1"><span class="font-black">${turno.giorno}</span> <span class="text-gray-600">(${turno.orario})</span></div> 
                                   <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong> <span class="text-sm text-gray-500">(${turno.reparto})</span></div>`;
                 
-                if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto') {
+                // Controllo dinamico se il reparto del turno richiede il veicolo
+                const repartoTurno = listaRepartiGlobal.find(r => r.nome === turno.reparto);
+                const richiedeVeicolo = repartoTurno ? repartoTurno.richiede_veicolo : false;
+                
+                if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto' && richiedeVeicolo) {
                     let selectVeicoloHtml = `<div class="mt-2 text-sm">🛵 Mezzo: <select onchange="fetch('/api/turni/${turno.id}/veicolo', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({veicolo_id: this.value||null})}).then(caricaTurni)" class="text-xs p-1 border rounded bg-white"><option value="">Nessuno</option>`;
                     listaVeicoliGlobal.forEach(v => { selectVeicoloHtml += `<option value="${v.id}" ${turno.veicolo_id === v.id ? 'selected' : ''}>${v.nome}</option>`; });
                     testoTurno += selectVeicoloHtml + `</select></div>`;
-                } else if(turno.nome_veicolo) testoTurno += `<div class="text-gray-800 mt-1">🛵 Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
+                } else if(turno.nome_veicolo && richiedeVeicolo) {
+                    testoTurno += `<div class="text-gray-800 mt-1">🛵 Mezzo: <strong>${turno.nome_veicolo}</strong></div>`;
+                }
                 
                 if(turno.stato === 'in_approvazione') testoTurno += `<div class="mt-2 text-pink-700 text-sm font-semibold">⚠️ ${turno.nome_sostituto} si è proposto!</div>`;
                 else if(turno.stato === 'proposto') testoTurno += `<div class="mt-2 text-teal-700 text-sm font-bold">✋ Proposta in attesa</div>`;
@@ -444,7 +450,6 @@
                     if (turno.stato === 'in_approvazione') btn.innerHTML += `<button class="bg-green-500 text-white px-3 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'approva')">✅ Approva</button><button class="bg-red-500 text-white px-3 py-1 rounded" onclick="cambiaStato(${turno.id}, 'assegnato')">❌ Rifiuta</button>`;
                     else if (turno.stato === 'proposto') btn.innerHTML += `<button class="bg-teal-600 text-white px-4 py-1 rounded shadow-sm" onclick="cambiaStato(${turno.id}, 'assegnato')">✅ Approva</button>`;
                     
-                    // NUOVO TASTO MODIFICA (SOLO MANAGER)
                     btn.innerHTML += `<button class="bg-blue-500 text-white px-3 py-1 rounded shadow-sm" onclick="modificaTurno(${turno.id})">✏️ Modifica</button>`;
                     btn.innerHTML += `<button class="bg-gray-800 text-white px-3 py-1 rounded shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️</button>`;
                 } else {
