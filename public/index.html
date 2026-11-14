@@ -357,6 +357,10 @@
                     tabellaUtenti.innerHTML += `<tr class="border-b"><td class="p-2">${utente.nome} (${utente.ruolo})</td><td class="p-2 text-right">
                     ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500">🗑️</button>` : 'Tu'}</td></tr>`;
                 });
+
+                if (utenteLoggato?.ruolo === 'manager') {
+                    caricaStatisticheMensili();
+                }
             });
         }
 
@@ -378,22 +382,29 @@
 
         function caricaStatisticheMensili() {
             const mese = document.getElementById('selettore-mese-stats').value;
-            if(!mese) return;
-            apiFetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
-                const tbody = document.getElementById('tabella-statistiche');
-                tbody.innerHTML = '';
-                stats.forEach(s => {
-                    const oreText = s.totale_ore ? s.totale_ore.toFixed(1) : 0;
-                    tbody.innerHTML += `
-                        <tr class="border-b">
-                            <td class="p-3 font-bold">${s.nome}</td>
-                            <td class="p-3">${s.reparto || '-'}</td>
-                            <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
-                            <td class="p-3 text-right text-indigo-700 font-bold">${oreText} h</td>
-                        </tr>
-                    `;
-                });
-            });
+            if (!mese) return;
+            apiFetch(`/api/statistiche/mensili?mese=${mese}`)
+                .then(res => res.json())
+                .then(stats => {
+                    const tbody = document.getElementById('tabella-statistiche');
+                    tbody.innerHTML = '';
+                    if (!Array.isArray(stats) || stats.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
+                        return;
+                    }
+                    stats.forEach(s => {
+                        const oreText = Number(s.totale_ore || 0).toFixed(1);
+                        tbody.innerHTML += `
+                            <tr class="border-b">
+                                <td class="p-3 font-bold">${s.nome}</td>
+                                <td class="p-3">${s.reparto || '-'}</td>
+                                <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
+                                <td class="p-3 text-right text-indigo-700 font-bold">${oreText} h</td>
+                            </tr>
+                        `;
+                    });
+                })
+                .catch(err => console.error("Errore caricamento statistiche:", err));
         }
 
         // --- SALVATAGGIO DATI ---
@@ -472,6 +483,10 @@
 
                 if (vistaAttuale === 'lista') renderLista(turniFiltrati);
                 else renderCalendario(turniFiltrati);
+
+                if (utenteLoggato.ruolo === 'manager') {
+                    caricaStatisticheMensili();
+                }
             });
         }
 
@@ -508,7 +523,7 @@
                     div.className = `p-4 rounded-lg border-l-4 border-blue-500 bg-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center`;
                     html = `<div>
                         <div class="text-lg font-bold">${turno.giorno} | <span id="orario-text-${turno.id}">${turno.orario}</span></div>
-                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} Reparto: <strong>${turno.reparto || '-'}</strong></div>
+                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} - Reparto: <strong>${turno.reparto || '-'}</strong></div>
                         ${turno.nome_veicolo ? `<div class="text-sm text-gray-500">🚗 Mezzo: ${turno.nome_veicolo}</div>` : ''}
                     </div>`;
                     
