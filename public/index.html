@@ -36,9 +36,9 @@
 
         <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <span id="nome-loggato" class="text-lg font-medium"></span>
-            <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition px-4 py-2 rounded-lg font-bold w-full md:w-auto">Esci</button>
+            <button onclick="cambiaAttivita()" class="bg-yellow-500 hover:bg-yellow-600 transition text-gray-900 px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">🔄 Cambia Locale</button>
+            <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
         </div>
-    </div>
     
     <div id="contenuto-app" class="hidden space-y-6">
         
@@ -423,6 +423,30 @@
             });
         });
         window.eseguiLogout = () => location.reload();
+
+        // --- CAMBIA ATTIVITÀ (Ritorna al codice locale) ---
+        window.cambiaAttivita = function() {
+            // 1. Cancella i dati in memoria per sicurezza
+            utenteLoggato = null;
+            aziendaCorrenteId = null;
+            turniGlobal = [];
+            
+            // 2. Nasconde l'interfaccia dell'app e le info utente
+            document.getElementById('contenuto-app').classList.add('hidden');
+            document.getElementById('user-info').classList.add('hidden');
+            
+            // 3. Ripristina il form di login al primo step (Codice Attività)
+            const formLogin = document.getElementById('form-login');
+            formLogin.classList.remove('hidden');
+            formLogin.reset();
+            
+            document.getElementById('blocco-utente').classList.add('hidden');
+            document.getElementById('blocco-utente').classList.remove('flex');
+            document.getElementById('blocco-codice').classList.remove('hidden');
+            
+            // 4. Ripristina il titolo generico
+            document.getElementById('header-business').innerHTML = 'Gestionale Turni 🍔🛵';
+        };
 
         // CARICAMENTO E RENDERIZZAZIONE TURNI (LISTA O CALENDARIO)
         function caricaTurni() {
