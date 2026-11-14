@@ -185,18 +185,14 @@ app.post('/api/superadmin/aziende', async (req, res) => {
         const emojiPulita = (emoji_business && emoji_business.trim()) ? emoji_business.trim() : '🏢';
         const passTitolare = (password_titolare && password_titolare.trim()) ? password_titolare.trim() : 'admin123';
 
-        // 1. Crea l'azienda con il codice scelto
         await pool.query("INSERT INTO aziende (id, nome_locale) VALUES ($1, $2)", [codiceNum, nomePulito]);
-        // Allinea la sequenza SERIAL di PostgreSQL
         await pool.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
 
-        // 2. Crea le impostazioni base dell'attività
         await pool.query(
             "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ($1, $2, $3)",
             [nomePulito, emojiPulita, codiceNum]
         );
 
-        // 3. Crea l'account Titolare iniziale (reparti, veicoli, turni e staff restano completamente vuoti)
         await pool.query(
             "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', $1, $2)",
             [passTitolare, codiceNum]
@@ -206,6 +202,54 @@ app.post('/api/superadmin/aziende', async (req, res) => {
     } catch (err) {
         console.error("Errore creazione azienda:", err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Cambia il codice identificativo di un'attività esistente e aggiorna tutti i dati collegati
+app.put('/api/superadmin/aziende/:id/codice', async (req, res) => {
+    const vecchioCodice = parseInt(req.params.id, 10);
+    const nuovoCodice = parseInt(req.body.nuovo_codice, 10);
+
+    if (isNaN(vecchioCodice) || isNaN(nuovoCodice) || nuovoCodice <= 0) {
+        return res.json({ success: false, message: "Il nuovo codice deve essere un numero maggiore di 0 (lo 0 è riservato al Super Admin)." });
+    }
+    if (vecchioCodice === nuovoCodice) {
+        return res.json({ success: false, message: "Il nuovo codice coincide con quello attuale." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const oldCheck = await client.query("SELECT id FROM aziende WHERE id = $1", [vecchioCodice]);
+        if (oldCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: "Attività originale non trovata." });
+        }
+
+        const newCheck = await client.query("SELECT id FROM aziende WHERE id = $1", [nuovoCodice]);
+        if (newCheck.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: `Il codice #${nuovoCodice} è già assegnato a un'altra attività!` });
+        }
+
+        await client.query("UPDATE aziende SET id = $1 WHERE id = $2", [nuovoCodice, vecchioCodice]);
+        await client.query("UPDATE impostazioni SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
+        await client.query("UPDATE reparti SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
+        await client.query("UPDATE utenti SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
+        await client.query("UPDATE veicoli SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
+        await client.query("UPDATE turni SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
+
+        await client.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Errore cambio codice azienda:", err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -224,7 +268,6 @@ app.delete('/api/superadmin/aziende/:id', async (req, res) => {
     }
 });
 
-// Permette al Super Admin di entrare direttamente nella gestione di un'attività
 app.post('/api/superadmin/accedi-azienda/:id', async (req, res) => {
     try {
         const idNum = parseInt(req.params.id, 10);

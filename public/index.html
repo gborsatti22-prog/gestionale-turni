@@ -257,6 +257,7 @@
         let utenteLoggato = null; 
         let aziendaCorrenteId = null; 
         let superadminToken = null;
+        let listaAziendeSA = {};
         
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
@@ -419,6 +420,7 @@
                 .then(aziende => {
                     const tbody = document.getElementById('tabella-aziende-sa');
                     tbody.innerHTML = '';
+                    listaAziendeSA = {};
 
                     if (!Array.isArray(aziende) || aziende.length === 0) {
                         tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Nessuna attività presente.</td></tr>`;
@@ -426,6 +428,7 @@
                     }
 
                     aziende.forEach(az => {
+                        listaAziendeSA[az.id] = az;
                         tbody.innerHTML += `
                             <tr class="border-b hover:bg-gray-50">
                                 <td class="p-3">
@@ -434,9 +437,10 @@
                                 <td class="p-3 font-bold text-gray-900">${az.emoji_business || '🏢'} ${az.nome_locale}</td>
                                 <td class="p-3 text-center text-sm text-gray-600">${az.totale_utenti}</td>
                                 <td class="p-3 text-center text-sm text-gray-600">${az.totale_turni}</td>
-                                <td class="p-3 text-right flex justify-end gap-2">
+                                <td class="p-3 text-right flex flex-wrap justify-end gap-2">
                                     <button onclick="entraInAziendaSuperAdmin(${az.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🔑 Gestisci</button>
-                                    <button onclick="eliminaAziendaSuperAdmin(${az.id}, '${az.nome_locale.replace(/'/g, "\\'")}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🗑️</button>
+                                    <button onclick="cambiaCodiceAziendaSuperAdmin(${az.id})" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Cambia Codice Locale">✏️ Codice</button>
+                                    <button onclick="eliminaAziendaSuperAdmin(${az.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Elimina Attività">🗑️</button>
                                 </td>
                             </tr>
                         `;
@@ -472,6 +476,36 @@
             });
         });
 
+        window.cambiaCodiceAziendaSuperAdmin = function(vecchioCodice) {
+            const az = listaAziendeSA[vecchioCodice];
+            const nomeLocale = az ? az.nome_locale : `Attività #${vecchioCodice}`;
+            const input = prompt(`Inserisci il nuovo codice numerico per "${nomeLocale}" (codice attuale: #${vecchioCodice}):`, vecchioCodice);
+            
+            if (input === null) return;
+            const nuovoCodice = parseInt(input.trim(), 10);
+
+            if (isNaN(nuovoCodice) || nuovoCodice <= 0) {
+                return alert("Inserisci un numero valido maggiore di 0 (lo 0 è riservato al Super Admin).");
+            }
+            if (nuovoCodice === vecchioCodice) return;
+
+            apiFetch(`/api/superadmin/aziende/${vecchioCodice}/codice`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nuovo_codice: nuovoCodice })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Codice di "${nomeLocale}" aggiornato da #${vecchioCodice} a #${nuovoCodice}!`);
+                    caricaAziendeSuperAdmin();
+                } else {
+                    alert(data.message || "Errore durante la modifica del codice.");
+                }
+            })
+            .catch(() => alert("Errore di connessione al server."));
+        };
+
         window.entraInAziendaSuperAdmin = function(id) {
             apiFetch(`/api/superadmin/accedi-azienda/${id}`, { method: 'POST' })
                 .then(res => res.json())
@@ -488,7 +522,9 @@
                 });
         };
 
-        window.eliminaAziendaSuperAdmin = function(id, nome) {
+        window.eliminaAziendaSuperAdmin = function(id) {
+            const az = listaAziendeSA[id];
+            const nome = az ? az.nome_locale : `Attività #${id}`;
             if (confirm(`ATTENZIONE: Vuoi eliminare definitivamente l'attività "${nome}" (#${id}) e tutti i suoi turni, utenti e reparti?`)) {
                 apiFetch(`/api/superadmin/aziende/${id}`, { method: 'DELETE' })
                     .then(() => caricaAziendeSuperAdmin());
