@@ -67,9 +67,7 @@ function controllaDatiIniziali() {
 }
 
 // --- MIDDLEWARE DI SICUREZZA MULTI-TENANT ---
-// Intercetta ogni richiesta API per verificare l'appartenenza al locale
 app.use('/api', (req, res, next) => {
-    // Il login e la verifica del codice azienda sono pubbliche
     if (req.path.startsWith('/verifica-azienda') || req.path === '/login') {
         return next();
     }
@@ -92,7 +90,6 @@ app.get('/api/verifica-azienda/:codice', async (req, res) => {
         if (result.rows.length > 0) res.json({ success: true, azienda: result.rows[0] });
         else res.json({ success: false, message: "Codice attività inesistente." });
     } catch (err) { 
-        console.error("Errore verifica codice:", err.message);
         res.status(500).json({ error: err.message }); 
     }
 });
@@ -223,14 +220,26 @@ app.get('/api/turni', async (req, res) => {
 
 app.post('/api/turni', async (req, res) => {
     try {
-        let { giorno, orario, utente_id, reparto, veicolo_id, settimane, stato } = req.body;
+        // BUG 1 FIXATO: Leggiamo 'ricorrenza' anziché 'settimane' come ci manda il frontend
+        let { giorno, orario, utente_id, veicolo_id, ricorrenza, stato } = req.body;
+        
+        let numSettimane = parseInt(ricorrenza) || 1;
+        // BUG 2 FIXATO: Se veicolo_id è una stringa vuota, trasformalo in null per Postgres
+        let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id) : null;
+
+        // Ricavo in automatico il reparto associato a questo utente
+        const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
+        let reparto = uRes.rows.length > 0 ? uRes.rows[0].reparto : null;
+
         let dataCorrente = new Date(giorno);
         
-        for (let i = 0; i < settimane; i++) {
-            let dataGiorno = dataCorrente.toISOString().split('T')[0];
+        for (let i = 0; i < numSettimane; i++) {
+            // FIX per evitare spostamenti di timezone
+            let dataGiorno = new Date(dataCorrente.getTime() - (dataCorrente.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            
             await pool.query(
                 "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
-                [dataGiorno, orario, utente_id, reparto, veicolo_id, stato, req.azienda_id]
+                [dataGiorno, orario, utente_id, reparto, idVeicoloSafe, stato, req.azienda_id]
             );
             dataCorrente.setDate(dataCorrente.getDate() + 7);
         }
@@ -248,13 +257,21 @@ app.delete('/api/turni/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id', async (req, res) => {
+// ROTTA AGGIUNTA: Modifica orario (chiamata dal tasto "✏️ Modifica Orario")
+app.put('/api/turni/:id/orario', async (req, res) => {
     try {
-        const { giorno, orario, utente_id, reparto, veicolo_id } = req.body;
         await pool.query(
-            "UPDATE turni SET giorno = $1, orario = $2, utente_id = $3, reparto = $4, veicolo_id = $5 WHERE id = $6 AND azienda_id = $7", 
-            [giorno, orario, utente_id, reparto, veicolo_id, req.params.id, req.azienda_id]
+            "UPDATE turni SET orario = $1 WHERE id = $2 AND azienda_id = $3", 
+            [req.body.orario, req.params.id, req.azienda_id]
         );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ROTTA AGGIUNTA: Conferma proposta (chiamata dal tasto "✅ Conferma")
+app.put('/api/turni/:id/conferma', async (req, res) => {
+    try {
+        await pool.query("UPDATE turni SET stato = 'confermato' WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -262,27 +279,6 @@ app.put('/api/turni/:id', async (req, res) => {
 app.put('/api/turni/:id/stato', async (req, res) => {
     try {
         await pool.query("UPDATE turni SET stato = $1 WHERE id = $2 AND azienda_id = $3", [req.body.stato, req.params.id, req.azienda_id]);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.put('/api/turni/:id/veicolo', async (req, res) => {
-    try {
-        await pool.query("UPDATE turni SET veicolo_id = $1 WHERE id = $2 AND azienda_id = $3", [req.body.veicolo_id, req.params.id, req.azienda_id]);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.put('/api/turni/:id/proponi', async (req, res) => {
-    try {
-        await pool.query("UPDATE turni SET sostituto_id = $1, stato = 'in_approvazione' WHERE id = $2 AND azienda_id = $3", [req.body.sostituto_id, req.params.id, req.azienda_id]);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.put('/api/turni/:id/approva', async (req, res) => {
-    try {
-        await pool.query("UPDATE turni SET utente_id = sostituto_id, sostituto_id = NULL, stato = 'assegnato' WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -313,7 +309,7 @@ app.get('/api/statistiche/mensili', async (req, res) => {
             FROM utenti u
             LEFT JOIN turni t ON u.id = t.utente_id 
                 AND t.giorno LIKE $1
-                AND t.stato = 'assegnato'
+                AND t.stato = 'confermato' -- BUG 4 FIXATO (prima era 'assegnato')
                 AND t.azienda_id = $2
             WHERE u.ruolo != 'manager' AND u.azienda_id = $2
         `;
