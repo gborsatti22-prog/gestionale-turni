@@ -748,6 +748,7 @@
                     }
                 } else {
                     div.className = `p-4 rounded-lg border-l-4 border-blue-500 bg-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center`;
+                    const orarioSafe = (turno.orario || '').replace(/'/g, "\\'");
                     html = `<div>
                         <div class="text-lg font-bold">${turno.giorno} | <span id="orario-text-${turno.id}">${turno.orario}</span></div>
                         <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} - Reparto: <strong>${turno.reparto || '-'}</strong></div>
@@ -756,7 +757,7 @@
                     
                     if (utenteLoggato.ruolo === 'manager') {
                         html += `<div class="mt-2 md:mt-0 flex flex-wrap gap-2">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${turno.orario}')">✏️ Modifica Orario</button>
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${orarioSafe}')">✏️ Modifica Orario</button>
                             <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>
                         </div>`;
                     }
@@ -769,7 +770,105 @@
         
         function renderCalendario(turniFiltrati) {
             const container = document.getElementById('calendario-turni');
-            container.innerHTML = `<div class="text-center p-6 text-gray-500">Vista Calendario: al momento ci sono ${turniFiltrati.length} turni/assenze.</div>`;
+            const meseVal = document.getElementById('mese-calendario').value || meseCorrenteStr;
+            const [anno, mese] = meseVal.split('-').map(Number);
+
+            const primoGiorno = new Date(anno, mese - 1, 1);
+            // Lunedi = 0, ..., Domenica = 6
+            const offsetInizio = (primoGiorno.getDay() + 6) % 7;
+            const giorniNelMese = new Date(anno, mese, 0).getDate();
+
+            const oggiObj = new Date();
+            const oggiStr = `${oggiObj.getFullYear()}-${String(oggiObj.getMonth() + 1).padStart(2, '0')}-${String(oggiObj.getDate()).padStart(2, '0')}`;
+
+            const turniPerGiorno = {};
+            turniFiltrati.forEach(t => {
+                if (!turniPerGiorno[t.giorno]) turniPerGiorno[t.giorno] = [];
+                turniPerGiorno[t.giorno].push(t);
+            });
+
+            const giorniSettimana = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+
+            let html = `<div class="min-w-[840px] border border-gray-200 rounded-xl overflow-hidden shadow-sm">`;
+            html += `<div class="grid grid-cols-7 bg-gray-900 text-white text-center text-xs font-bold uppercase tracking-wider">`;
+            giorniSettimana.forEach(g => {
+                html += `<div class="py-2.5 border-r border-gray-700 last:border-r-0">${g}</div>`;
+            });
+            html += `</div>`;
+
+            html += `<div class="grid grid-cols-7 bg-gray-200 gap-px">`;
+
+            // Celle vuote iniziali
+            for (let i = 0; i < offsetInizio; i++) {
+                html += `<div class="bg-gray-50 min-h-[120px] p-2"></div>`;
+            }
+
+            // Celle dei giorni del mese
+            for (let giorno = 1; giorno <= giorniNelMese; giorno++) {
+                const dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(giorno).padStart(2, '0')}`;
+                const isOggi = dataStr === oggiStr;
+                const eventi = turniPerGiorno[dataStr] || [];
+
+                html += `<div class="bg-white min-h-[125px] p-2 flex flex-col gap-1.5 ${isOggi ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/20' : ''}">`;
+                html += `<div class="flex justify-between items-center mb-0.5">
+                            <span class="text-xs font-bold ${isOggi ? 'bg-blue-600 text-white px-2 py-0.5 rounded-full' : 'text-gray-600'}">${giorno}</span>
+                            ${eventi.length > 0 ? `<span class="text-[10px] font-semibold text-gray-400">${eventi.length}</span>` : ''}
+                         </div>`;
+
+                eventi.forEach(turno => {
+                    const orarioSafe = (turno.orario || '').replace(/'/g, "\\'");
+                    if (turno.stato === 'indisponibile') {
+                        html += `
+                            <div class="p-1.5 rounded border-l-4 border-red-500 bg-red-50 text-red-900 text-xs leading-tight">
+                                <div class="flex justify-between items-start gap-1">
+                                    <span class="font-bold">🚫 ${turno.nome_proprietario || 'Dipendente'}</span>
+                                    ${(utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Annulla assenza">✕</button>` : ''}
+                                </div>
+                                <div class="text-[11px] text-red-700 italic truncate" title="${turno.orario}">${turno.orario}</div>
+                            </div>`;
+                    } else if (turno.stato === 'proposta') {
+                        html += `
+                            <div class="p-1.5 rounded border-l-4 border-yellow-500 bg-yellow-50 text-yellow-900 text-xs leading-tight">
+                                <div class="flex justify-between items-start gap-1">
+                                    <span class="font-bold">✋ ${turno.nome_proprietario || 'Dipendente'}</span>
+                                    <div class="flex gap-1 shrink-0">
+                                        ${utenteLoggato.ruolo === 'manager' ? `<button onclick="confermaTurno(${turno.id})" class="text-green-600 hover:text-green-800 font-bold" title="Conferma">✓</button>` : ''}
+                                        ${(utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Elimina">✕</button>` : ''}
+                                    </div>
+                                </div>
+                                <div class="text-[11px] font-semibold text-yellow-800">${turno.orario}</div>
+                            </div>`;
+                    } else {
+                        html += `
+                            <div class="p-1.5 rounded border-l-4 border-blue-500 bg-blue-50 text-blue-950 text-xs leading-tight">
+                                <div class="flex justify-between items-start gap-1">
+                                    <span class="font-bold truncate">${turno.nome_proprietario || 'Dipendente'}</span>
+                                    ${utenteLoggato.ruolo === 'manager' ? `
+                                        <div class="flex gap-1 shrink-0">
+                                            <button onclick="modificaOrario(${turno.id}, '${orarioSafe}')" class="text-blue-600 hover:text-blue-800" title="Modifica orario">✏️</button>
+                                            <button onclick="eliminaTurno(${turno.id})" class="text-red-500 hover:text-red-700 font-bold" title="Elimina turno">✕</button>
+                                        </div>` : ''}
+                                </div>
+                                <div class="text-[11px] font-semibold text-blue-800">${turno.orario}</div>
+                                <div class="text-[10px] text-gray-600 truncate">${turno.reparto || '-'}${turno.nome_veicolo ? ` • 🚗 ${turno.nome_veicolo}` : ''}</div>
+                            </div>`;
+                    }
+                });
+
+                html += `</div>`;
+            }
+
+            // Celle vuote finali per completare l'ultima riga
+            const totaleCelle = offsetInizio + giorniNelMese;
+            const resto = totaleCelle % 7;
+            if (resto !== 0) {
+                for (let i = 0; i < 7 - resto; i++) {
+                    html += `<div class="bg-gray-50 min-h-[120px] p-2"></div>`;
+                }
+            }
+
+            html += `</div></div>`;
+            container.innerHTML = html;
         }
 
         // --- AZIONI SUI TURNI ---
