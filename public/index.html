@@ -16,11 +16,22 @@
         <h2 id="header-business" class="text-2xl font-bold flex items-center gap-2">Gestionale Turni 🍔🛵</h2>
         
         <form id="form-login" class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-            <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-medium">
-                <option value="">-- Chi sei? --</option>
-            </select>
-            <input type="password" id="login-password" placeholder="Password" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto">
-            <button type="submit" class="bg-blue-500 hover:bg-blue-600 transition text-white px-5 py-2 rounded-lg font-bold w-full md:w-auto">Accedi</button>
+            
+            <!-- STEP 1: CODICE ATTIVITÀ -->
+            <div id="blocco-codice" class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                <input type="number" id="login-codice" placeholder="Codice Locale (es. 1)" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-bold bg-yellow-400 outline-none text-center">
+                <button type="button" onclick="verificaCodice()" class="bg-yellow-600 hover:bg-yellow-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Verifica</button>
+            </div>
+
+            <!-- STEP 2: LOGIN UTENTE (Nascosto all'inizio) -->
+            <div id="blocco-utente" class="hidden flex-col md:flex-row gap-2 w-full md:w-auto">
+                <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-medium">
+                    <option value="">-- Chi sei? --</option>
+                </select>
+                <input type="password" id="login-password" placeholder="Password" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto">
+                <button type="submit" id="btn-login" class="bg-blue-500 hover:bg-blue-600 transition text-white px-5 py-2 rounded-lg font-bold w-full md:w-auto">Accedi</button>
+            </div>
+
         </form>
 
         <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
@@ -200,16 +211,55 @@
     <!-- JAVASCRIPT APP -->
     <script>
         let utenteLoggato = null; 
+        let aziendaCorrenteId = null; // Memorizza l'azienda per la sicurezza multi-tenant
+        
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
         let listaRepartiGlobal = [];
-        let turniGlobal = []; // Tiene in memoria i turni scaricati
-        let vistaAttuale = 'lista'; // 'lista' o 'calendario'
+        let turniGlobal = [];
+        let vistaAttuale = 'lista';
 
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
         document.getElementById('mese-calendario').value = meseCorrenteStr;
+
+        // --- SISTEMA DI SICUREZZA MULTI-TENANT ---
+        // Intercetta chiamate API per inserire in automatico l'ID Azienda
+        async function apiFetch(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (aziendaCorrenteId) {
+                options.headers['x-azienda-id'] = aziendaCorrenteId;
+            }
+            return fetch(url, options);
+        }
+
+        // --- VERIFICA DEL CODICE ATTIVITÀ ---
+        window.verificaCodice = function() {
+            const codice = document.getElementById('login-codice').value;
+            if (!codice) return alert("Inserisci un codice attività!");
+            
+            fetch(`/api/verifica-azienda/${codice}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        aziendaCorrenteId = data.azienda.id;
+                        document.getElementById('header-business').innerHTML = `${data.azienda.nome_locale} 🍔🛵`;
+                        
+                        // Nascondi il codice e mostra la tendina dei nomi e password
+                        document.getElementById('blocco-codice').classList.add('hidden');
+                        document.getElementById('blocco-utente').classList.remove('hidden');
+                        document.getElementById('blocco-utente').classList.add('flex');
+                        
+                        // Carica i reparti (serve per i veicoli) e poi gli utenti dell'azienda
+                        caricaImpostazioni();
+                        caricaReparti().then(() => caricaUtenti());
+                    } else {
+                        alert(data.message); // Codice errato
+                    }
+                })
+                .catch(() => alert("Errore di connessione al server."));
+        };
 
         // Toggles tra visualizzazione Lista e Calendario
         window.cambiaVista = function(vista) {
@@ -240,7 +290,7 @@
         };
 
         function caricaImpostazioni() {
-            return fetch('/api/impostazioni').then(res => res.json()).then(data => {
+            return apiFetch('/api/impostazioni').then(res => res.json()).then(data => {
                 const titolo = `${data.nome_business || 'Gestionale Turni'} ${data.emoji_business || ''}`;
                 document.getElementById('header-business').textContent = titolo;
                 document.getElementById('page-title').textContent = titolo;
@@ -250,7 +300,7 @@
         }
 
         function caricaReparti() {
-            return fetch('/api/reparti').then(res => res.json()).then(reparti => {
+            return apiFetch('/api/reparti').then(res => res.json()).then(reparti => {
                 listaRepartiGlobal = reparti;
                 const selectReparto = document.getElementById('nuovo-reparto');
                 const filtroReparto = document.getElementById('filtro-reparto');
@@ -271,7 +321,7 @@
         }
 
         function caricaUtenti() {
-            return fetch('/api/utenti').then(res => res.json()).then(utenti => {
+            return apiFetch('/api/utenti').then(res => res.json()).then(utenti => {
                 listaUtentiGlobal = utenti;
                 const loginSelect = document.getElementById('login-select');
                 const selettoreDipendente = document.getElementById('selettore-dipendente');
@@ -295,7 +345,7 @@
         }
 
         function caricaVeicoli() {
-            return fetch('/api/veicoli').then(res => res.json()).then(veicoli => {
+            return apiFetch('/api/veicoli').then(res => res.json()).then(veicoli => {
                 listaVeicoliGlobal = veicoli;
                 const selVeicolo = document.getElementById('selettore-veicolo');
                 const tabVeicoli = document.getElementById('tabella-veicoli');
@@ -313,7 +363,7 @@
         function caricaStatisticheMensili() {
             const mese = document.getElementById('selettore-mese-stats').value;
             if(!mese) return;
-            fetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
+            apiFetch(`/api/statistiche/mensili?mese=${mese}`).then(res => res.json()).then(stats => {
                 const tbody = document.getElementById('tabella-statistiche');
                 tbody.innerHTML = '';
                 stats.forEach(s => {
@@ -330,27 +380,29 @@
             });
         }
 
-        caricaImpostazioni();
-        caricaReparti().then(() => { caricaUtenti(); caricaVeicoli(); });
-
         // LISTENER FORM SETUP MANAGER
-        document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
-        document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); fetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
-        document.getElementById('form-nuovo-utente').addEventListener('submit', e => { e.preventDefault(); fetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value }) }).then(() => { caricaUtenti(); e.target.reset(); }); });
-        document.getElementById('form-nuovo-veicolo').addEventListener('submit', e => { e.preventDefault(); fetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-veicolo-nome').value, tipo: document.getElementById('nuovo-veicolo-tipo').value }) }).then(() => { caricaVeicoli(); e.target.reset(); }); });
+        document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
+        document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
+        document.getElementById('form-nuovo-utente').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value }) }).then(() => { caricaUtenti(); e.target.reset(); }); });
+        document.getElementById('form-nuovo-veicolo').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-veicolo-nome').value, tipo: document.getElementById('nuovo-veicolo-tipo').value }) }).then(() => { caricaVeicoli(); e.target.reset(); }); });
         
-        window.eliminaReparto = id => confirm("Eliminare?") && fetch(`/api/reparti/${id}`, { method: 'DELETE' }).then(() => { caricaReparti().then(caricaUtenti); });
-        window.eliminaUtente = id => confirm("Eliminare?") && fetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => caricaUtenti());
-        window.eliminaVeicolo = id => confirm("Eliminare?") && fetch(`/api/veicoli/${id}`, { method: 'DELETE' }).then(() => { caricaVeicoli(); caricaTurni(); });
+        window.eliminaReparto = id => confirm("Eliminare?") && apiFetch(`/api/reparti/${id}`, { method: 'DELETE' }).then(() => { caricaReparti().then(caricaUtenti); });
+        window.eliminaUtente = id => confirm("Eliminare?") && apiFetch(`/api/utenti/${id}`, { method: 'DELETE' }).then(() => caricaUtenti());
+        window.eliminaVeicolo = id => confirm("Eliminare?") && apiFetch(`/api/veicoli/${id}`, { method: 'DELETE' }).then(() => { caricaVeicoli(); caricaTurni(); });
         window.controllaReparto = () => { const s = document.getElementById('selettore-dipendente'); const v = document.getElementById('selettore-veicolo'); if(s.selectedIndex>0){ v.classList.toggle('hidden', s.options[s.selectedIndex].dataset.richiedeVeicolo !== "1"); } };
 
-        // LOGIN
+        // LOGIN UTENTE
         document.getElementById('form-login').addEventListener('submit', function(e) {
             e.preventDefault();
-            fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ utente_id: document.getElementById('login-select').value, password: document.getElementById('login-password').value }) })
+            apiFetch('/api/login', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ utente_id: document.getElementById('login-select').value, password: document.getElementById('login-password').value }) 
+            })
             .then(res => res.json()).then(data => {
                 if (data.success) {
                     utenteLoggato = data.utente;
+
                     document.getElementById('form-login').classList.add('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                     document.getElementById('nome-loggato').innerHTML = `Ciao, <strong>${utenteLoggato.nome}</strong>`;
@@ -364,7 +416,9 @@
                         document.getElementById('sezione-manager').classList.add('hidden');
                         document.getElementById('sezione-staff').classList.remove('hidden');
                     }
-                    caricaTurni();
+                    
+                    // Carica turni e veicoli solo ora
+                    caricaVeicoli().then(() => caricaTurni());
                 } else alert(data.message);
             });
         });
@@ -373,9 +427,8 @@
         // CARICAMENTO E RENDERIZZAZIONE TURNI (LISTA O CALENDARIO)
         function caricaTurni() {
             if (!utenteLoggato) return;
-            fetch('/api/turni').then(res => res.json()).then(turni => {
-                turniGlobal = turni; // Salva globalmente per le validazioni
-                
+            apiFetch('/api/turni').then(res => res.json()).then(turni => {
+                turniGlobal = turni; 
                 const filtroRepartoVal = document.getElementById('filtro-reparto').value;
                 const soloMiei = document.getElementById('filtro-miei').checked;
 
@@ -390,7 +443,7 @@
             });
         }
 
-        // VISTA A LISTA CLASSICA (CON FIX TENDINA MEZZI)
+        // VISTA A LISTA CLASSICA 
         function renderLista(turniFiltrati) {
             const lista = document.getElementById('lista-turni');
             lista.innerHTML = ''; 
@@ -414,7 +467,7 @@
                     }
                     div.innerHTML = html;
                     lista.appendChild(div);
-                    return; // Salta il resto del rendering per i turni normali
+                    return; 
                 }
 
                 // Renderizzazione Turni Normali
@@ -428,12 +481,11 @@
                 let testoTurno = `<div class="text-lg mb-1"><span class="font-black">${turno.giorno}</span> <span class="text-gray-600">(${turno.orario})</span></div> 
                                   <div class="text-gray-800">👤 <strong>${turno.nome_proprietario}</strong> <span class="text-sm text-gray-500">(${turno.reparto})</span></div>`;
                 
-                // Controllo dinamico se il reparto del turno richiede il veicolo
                 const repartoTurno = listaRepartiGlobal.find(r => r.nome === turno.reparto);
                 const richiedeVeicolo = repartoTurno ? repartoTurno.richiede_veicolo : false;
                 
                 if (utenteLoggato.ruolo === 'manager' && turno.stato !== 'proposto' && richiedeVeicolo) {
-                    let selectVeicoloHtml = `<div class="mt-2 text-sm">🛵 Mezzo: <select onchange="fetch('/api/turni/${turno.id}/veicolo', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({veicolo_id: this.value||null})}).then(caricaTurni)" class="text-xs p-1 border rounded bg-white"><option value="">Nessuno</option>`;
+                    let selectVeicoloHtml = `<div class="mt-2 text-sm">🛵 Mezzo: <select onchange="apiFetch('/api/turni/${turno.id}/veicolo', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({veicolo_id: this.value||null})}).then(caricaTurni)" class="text-xs p-1 border rounded bg-white"><option value="">Nessuno</option>`;
                     listaVeicoliGlobal.forEach(v => { selectVeicoloHtml += `<option value="${v.id}" ${turno.veicolo_id === v.id ? 'selected' : ''}>${v.nome}</option>`; });
                     testoTurno += selectVeicoloHtml + `</select></div>`;
                 } else if(turno.nome_veicolo && richiedeVeicolo) {
@@ -454,7 +506,7 @@
                     btn.innerHTML += `<button class="bg-gray-800 text-white px-3 py-1 rounded shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️</button>`;
                 } else {
                     if (turno.stato === 'assegnato' && turno.utente_id === utenteLoggato.id) btn.innerHTML = `<button class="bg-orange-500 text-white px-4 py-1 rounded" onclick="cambiaStato(${turno.id}, 'in_scambio')">🔄 Cedi Turno</button>`;
-                    else if (turno.stato === 'in_scambio' && turno.utente_id !== utenteLoggato.id) btn.innerHTML = `<button class="bg-purple-500 text-white px-4 py-1 rounded" onclick="fetch('/api/turni/${turno.id}/proponi', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sostituto_id:${utenteLoggato.id}})}).then(caricaTurni)">✋ Propongo</button>`;
+                    else if (turno.stato === 'in_scambio' && turno.utente_id !== utenteLoggato.id) btn.innerHTML = `<button class="bg-purple-500 text-white px-4 py-1 rounded" onclick="apiFetch('/api/turni/${turno.id}/proponi', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sostituto_id:${utenteLoggato.id}})}).then(caricaTurni)">✋ Propongo</button>`;
                     else if (turno.stato === 'proposto' && turno.utente_id === utenteLoggato.id) btn.innerHTML = `<button class="bg-red-500 text-white px-4 py-1 rounded" onclick="eliminaTurno(${turno.id})">Annulla</button>`;
                 }
 
@@ -483,10 +535,7 @@
             
             for(let giorno=1; giorno<=dataFine.getDate(); giorno++) {
                 const dataCorrente = `${anno}-${mese}-${String(giorno).padStart(2, '0')}`;
-                
-                // Ignora i turni "proposti" nel calendario manager, o mostra tutto
                 const turniDelGiorno = turni.filter(t => t.giorno === dataCorrente);
-                
                 const isOggi = dataCorrente === `${oggi.getFullYear()}-${String(oggi.getMonth()+1).padStart(2,'0')}-${String(oggi.getDate()).padStart(2,'0')}`;
                 
                 html += `<td class="border p-2 align-top h-28 relative hover:bg-gray-50 transition ${isOggi ? 'bg-blue-50 border-blue-200' : ''}">
@@ -494,13 +543,9 @@
                     <div class="mt-6 flex flex-col gap-1 overflow-y-auto max-h-24 no-scrollbar">`;
                 
                 turniDelGiorno.forEach(t => {
-                    if (t.stato === 'indisponibile') {
-                        html += `<div class="bg-red-100 text-red-800 text-xs px-1.5 py-1 rounded truncate shadow-sm cursor-help" title="Ferie/Permesso: ${t.orario}">🚫 ${t.nome_proprietario}</div>`;
-                    } else if (t.stato === 'proposto') {
-                        html += `<div class="bg-teal-50 text-teal-800 text-xs px-1.5 py-1 rounded truncate border border-teal-300 border-dashed cursor-help" title="Proposta di: ${t.nome_proprietario}">✋ ${t.nome_proprietario}</div>`;
-                    } else {
-                        html += `<div class="bg-blue-100 text-blue-900 text-xs px-1.5 py-1 rounded truncate border border-blue-200 shadow-sm cursor-help" title="${t.orario} - Reparto: ${t.reparto}">🕒 ${t.nome_proprietario}</div>`;
-                    }
+                    if (t.stato === 'indisponibile') html += `<div class="bg-red-100 text-red-800 text-xs px-1.5 py-1 rounded truncate shadow-sm cursor-help" title="Ferie/Permesso: ${t.orario}">🚫 ${t.nome_proprietario}</div>`;
+                    else if (t.stato === 'proposto') html += `<div class="bg-teal-50 text-teal-800 text-xs px-1.5 py-1 rounded truncate border border-teal-300 border-dashed cursor-help" title="Proposta di: ${t.nome_proprietario}">✋ ${t.nome_proprietario}</div>`;
+                    else html += `<div class="bg-blue-100 text-blue-900 text-xs px-1.5 py-1 rounded truncate border border-blue-200 shadow-sm cursor-help" title="${t.orario} - Reparto: ${t.reparto}">🕒 ${t.nome_proprietario}</div>`;
                 });
                 
                 html += `</div></td>`;
@@ -510,18 +555,14 @@
             container.innerHTML = html;
         }
 
-        // SALVATAGGIO TURNI DA PARTE DEL MANAGER (CON CONTROLLO FERIE)
+        // SALVATAGGIO TURNI DA PARTE DEL MANAGER
         document.getElementById('form-turno').addEventListener('submit', function(event) {
             event.preventDefault();
             const dipendenteSelezionato = document.getElementById('selettore-dipendente').value;
             const giornoScelto = document.getElementById('giorno').value;
             
-            // VALIDAZIONE INDISPONIBILITÀ (Controlla se il dipendente è in ferie in quel giorno)
             const inFerie = turniGlobal.find(t => t.utente_id == dipendenteSelezionato && t.giorno === giornoScelto && t.stato === 'indisponibile');
-            if (inFerie) {
-                alert(`⚠️ ATTENZIONE: Impossibile assegnare il turno.\n\nIl dipendente selezionato ha registrato un'assenza per il ${giornoScelto}.\nMotivo: ${inFerie.orario}`);
-                return;
-            }
+            if (inFerie) return alert(`⚠️ Impossibile assegnare il turno.\n\nIl dipendente selezionato ha registrato un'assenza per il ${giornoScelto}.\nMotivo: ${inFerie.orario}`);
             
             const selettore = document.getElementById('selettore-dipendente');
             const nuovoTurno = {
@@ -534,7 +575,7 @@
                 stato: 'assegnato'
             };
 
-            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoTurno) }).then(() => {
+            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuovoTurno) }).then(() => {
                 caricaTurni(); caricaStatisticheMensili();
                 document.getElementById('form-turno').reset(); 
             });
@@ -543,7 +584,7 @@
         // SALVATAGGIO TURNI PROPOSTI DALLO STAFF
         document.getElementById('form-proponi-turno').addEventListener('submit', e => {
             e.preventDefault();
-            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                 giorno: document.getElementById('giorno-proposta').value, orario: document.getElementById('orario-proposta').value,
                 utente_id: utenteLoggato.id, reparto: utenteLoggato.reparto, veicolo_id: null,
                 settimane: document.getElementById('settimane-ricorrenza-proposta').value, stato: 'proposto' 
@@ -553,7 +594,7 @@
         // SALVATAGGIO INDISPONIBILITÀ / FERIE
         document.getElementById('form-indisponibilita').addEventListener('submit', e => {
             e.preventDefault();
-            fetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                 giorno: document.getElementById('giorno-assenza').value, 
                 orario: document.getElementById('motivo-assenza').value, 
                 utente_id: utenteLoggato.id, 
@@ -561,17 +602,14 @@
             })}).then(() => { caricaTurni(); e.target.reset(); });
         });
 
-        // FUNZIONI DI MODIFICA
+        // FUNZIONI DI MODIFICA E STATO
         window.modificaTurno = async function(idTurno) {
             const turno = turniGlobal.find(t => t.id === idTurno);
             if (!turno) return;
-            
             const nuovoOrario = prompt(`Modifica orario per ${turno.nome_proprietario} del ${turno.giorno}:`, turno.orario);
-            
-            // Se l'utente clicca Annulla o lascia vuoto, non fare nulla
             if (nuovoOrario === null || nuovoOrario.trim() === "" || nuovoOrario === turno.orario) return;
 
-            fetch(`/api/turni/${turno.id}`, {
+            apiFetch(`/api/turni/${turno.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -581,22 +619,21 @@
                     reparto: turno.reparto,
                     veicolo_id: turno.veicolo_id
                 })
-            }).then(() => {
-                caricaTurni();
-                caricaStatisticheMensili();
-            });
+            }).then(() => { caricaTurni(); caricaStatisticheMensili(); });
         };
 
         window.cambiaStato = (idTurno, azione) => { 
-            if(azione === 'approva') fetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(caricaTurni);
-            else fetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: azione }) }).then(caricaTurni); 
+            if(azione === 'approva') apiFetch(`/api/turni/${idTurno}/approva`, { method: 'PUT' }).then(caricaTurni);
+            else apiFetch(`/api/turni/${idTurno}/stato`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato: azione }) }).then(caricaTurni); 
         };
-        window.eliminaTurno = id => confirm("Eliminare definitivamente?") && fetch(`/api/turni/${id}`, { method: 'DELETE' }).then(() => { caricaTurni(); caricaStatisticheMensili(); });
+        window.eliminaTurno = id => confirm("Eliminare definitivamente?") && apiFetch(`/api/turni/${id}`, { method: 'DELETE' }).then(() => { caricaTurni(); caricaStatisticheMensili(); });
     </script>
     
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Rimuove le frecce per gli input di tipo number */
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </body>
 </html>

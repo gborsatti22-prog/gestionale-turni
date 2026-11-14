@@ -67,8 +67,10 @@ function controllaDatiIniziali() {
 }
 
 // --- MIDDLEWARE DI SICUREZZA MULTI-TENANT ---
+// Intercetta ogni richiesta API per verificare l'appartenenza al locale
 app.use('/api', (req, res, next) => {
-    if (req.path === '/aziende' || req.path === '/login') {
+    // Il login e la verifica del codice azienda sono pubbliche
+    if (req.path.startsWith('/verifica-azienda') || req.path === '/login') {
         return next();
     }
     
@@ -83,13 +85,19 @@ app.use('/api', (req, res, next) => {
 
 // --- API ENDPOINTS ---
 
-app.get('/api/aziende', async (req, res) => {
+// VERIFICA CODICE ATTIVITÀ
+app.get('/api/verifica-azienda/:codice', async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, nome_locale FROM aziende ORDER BY id ASC");
-        res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+        const result = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [req.params.codice]);
+        if (result.rows.length > 0) res.json({ success: true, azienda: result.rows[0] });
+        else res.json({ success: false, message: "Codice attività inesistente." });
+    } catch (err) { 
+        console.error("Errore verifica codice:", err.message);
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
+// IMPOSTAZIONI
 app.get('/api/impostazioni', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [req.azienda_id]);
@@ -108,6 +116,7 @@ app.put('/api/impostazioni', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// REPARTI
 app.get('/api/reparti', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM reparti WHERE azienda_id = $1", [req.azienda_id]);
@@ -132,6 +141,7 @@ app.delete('/api/reparti/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// UTENTI & LOGIN
 app.get('/api/utenti', async (req, res) => {
     try {
         const result = await pool.query("SELECT id, nome, ruolo, reparto FROM utenti WHERE azienda_id = $1", [req.azienda_id]);
@@ -169,6 +179,7 @@ app.post('/api/login', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// VEICOLI
 app.get('/api/veicoli', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM veicoli WHERE azienda_id = $1", [req.azienda_id]);
@@ -193,6 +204,7 @@ app.delete('/api/veicoli/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// TURNI
 app.get('/api/turni', async (req, res) => {
     try {
         const query = `
@@ -223,7 +235,10 @@ app.post('/api/turni', async (req, res) => {
             dataCorrente.setDate(dataCorrente.getDate() + 7);
         }
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error("Errore salvataggio turno:", err.message);
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 app.delete('/api/turni/:id', async (req, res) => {
@@ -272,6 +287,7 @@ app.put('/api/turni/:id/approva', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// FUNZIONE CALCOLO ORE
 function calcolaOreTurno(orarioStr) {
     if (!orarioStr || !orarioStr.includes('-')) return 0;
     try {
@@ -280,11 +296,15 @@ function calcolaOreTurno(orarioStr) {
         const [hFine, mFine] = fine.split(':').map(Number);
         let dataInizio = new Date(2000, 0, 1, hInizio, mInizio || 0);
         let dataFine = new Date(2000, 0, 1, hFine, mFine || 0);
+        
+        // Se il turno finisce dopo mezzanotte
         if (dataFine < dataInizio) dataFine.setDate(dataFine.getDate() + 1);
+        
         return (dataFine - dataInizio) / (1000 * 60 * 60);
     } catch (e) { return 0; }
 }
 
+// STATISTICHE MENSILI
 app.get('/api/statistiche/mensili', async (req, res) => {
     try {
         const mese = req.query.mese; 
@@ -310,9 +330,13 @@ app.get('/api/statistiche/mensili', async (req, res) => {
 
         const statsArray = Object.values(statistiche).sort((a, b) => b.totale_turni - a.totale_turni);
         res.json(statsArray);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error("Errore statistiche:", err.message);
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
+// AVVIO SERVER
 app.listen(PORT, () => {
     console.log(`Server avviato sulla porta ${PORT}`);
 });
