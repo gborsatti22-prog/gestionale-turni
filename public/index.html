@@ -36,13 +36,68 @@
         </form>
 
         <!-- BARRA UTENTE LOGGATO -->
-        <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+        <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
             <span id="nome-loggato" class="text-lg font-medium"></span>
+            <button id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
             <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
         </div>
     </div>
     
     <div id="contenuto-app" class="hidden space-y-6">
+
+        <!-- SEZIONE SUPER ADMIN -->
+        <div id="sezione-superadmin" class="hidden space-y-6">
+            
+            <!-- CREA NUOVA ATTIVITÀ -->
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-700">
+                <h3 class="text-xl font-bold mb-1 flex items-center gap-2 text-gray-900">👑 Crea Nuova Attività</h3>
+                <p class="text-sm text-gray-500 mb-4">Assegna un codice univoco. La nuova attività partirà completamente vuota con un profilo Titolare pronto all'uso.</p>
+                
+                <form id="form-nuova-azienda" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Codice Univoco *</label>
+                        <input type="number" id="sa-codice" min="1" placeholder="es. 2" required class="w-full border p-2 rounded-lg font-bold bg-yellow-50 border-yellow-400 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Nome Attività / Locale *</label>
+                        <input type="text" id="sa-nome" placeholder="es. Pizzeria Da Mario" required class="w-full border p-2 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Emoji</label>
+                        <input type="text" id="sa-emoji" value="🍕" placeholder="es. 🍕" class="w-full border p-2 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Password Titolare *</label>
+                        <input type="text" id="sa-password" value="admin123" required class="w-full border p-2 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div class="md:col-span-5 flex justify-end mt-2">
+                        <button type="submit" class="bg-purple-700 hover:bg-purple-800 transition text-white px-6 py-2.5 rounded-lg font-bold w-full md:w-auto shadow-sm">➕ Crea Attività</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- LISTA TUTTE LE ATTIVITÀ -->
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-900">🏢 Attività Registrate nel Sistema</h3>
+                    <button onclick="caricaAziendeSuperAdmin()" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold transition">🔄 Aggiorna</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
+                                <th class="p-3">Codice</th>
+                                <th class="p-3">Attività</th>
+                                <th class="p-3 text-center">Utenti</th>
+                                <th class="p-3 text-center">Turni</th>
+                                <th class="p-3 text-right">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabella-aziende-sa"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
@@ -54,7 +109,6 @@
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     
-                    <!-- Filtro dinamico per Mezzo -->
                     <select id="selettore-dipendente" onchange="controllaReparto()" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">-- Scegli dipendente --</option>
                     </select>
@@ -112,7 +166,7 @@
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
                     <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
                     <form id="form-nuovo-reparto" class="flex gap-2 mb-4">
-                        <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-grow outline-none">
+                        <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-grow outline-none" placeholder="es. Sala, Cucina, Rider">
                         <label class="flex items-center text-xs font-bold"><input type="checkbox" id="nuovo-reparto-veicolo" class="mr-1"> Mezzo</label>
                         <button type="submit" class="bg-amber-500 text-white px-4 rounded-lg font-bold">+</button>
                     </form>
@@ -172,7 +226,7 @@
         </div>
 
         <!-- BACHECA TURNI -->
-        <div class="bg-white p-6 rounded-xl shadow-md">
+        <div id="bacheca-turni" class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
                 <div class="flex items-center gap-4">
                     <h3 class="text-xl font-bold">📅 Bacheca Turni</h3>
@@ -202,6 +256,7 @@
     <script>
         let utenteLoggato = null; 
         let aziendaCorrenteId = null; 
+        let superadminToken = null;
         
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
@@ -216,28 +271,39 @@
 
         async function apiFetch(url, options = {}) {
             if (!options.headers) options.headers = {};
-            if (aziendaCorrenteId) options.headers['x-azienda-id'] = aziendaCorrenteId;
+            if (aziendaCorrenteId !== null && aziendaCorrenteId !== undefined) {
+                options.headers['x-azienda-id'] = aziendaCorrenteId;
+            }
+            if (superadminToken) {
+                options.headers['x-superadmin-token'] = superadminToken;
+            }
             return fetch(url, options);
         }
 
         // --- GESTIONE LOGIN & LOGOUT ---
         window.verificaCodice = function() {
             const codice = document.getElementById('login-codice').value;
-            if (!codice) return alert("Inserisci un codice attività!");
+            if (codice === '') return alert("Inserisci un codice attività!");
             
             fetch(`/api/verifica-azienda/${codice}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
                         aziendaCorrenteId = data.azienda.id;
-                        document.getElementById('header-business').innerHTML = `${data.azienda.nome_locale} 🍔🛵`;
                         
                         document.getElementById('blocco-codice').classList.add('hidden');
                         document.getElementById('blocco-utente').classList.remove('hidden');
                         document.getElementById('blocco-utente').classList.add('flex');
-                        
-                        caricaImpostazioni();
-                        caricaReparti().then(() => caricaUtenti());
+
+                        if (data.isSuperAdmin) {
+                            document.getElementById('header-business').innerHTML = `Console Super Admin 👑`;
+                            const loginSelect = document.getElementById('login-select');
+                            loginSelect.innerHTML = `<option value="superadmin">👑 Super Admin</option>`;
+                        } else {
+                            document.getElementById('header-business').innerHTML = `${data.azienda.nome_locale} 🍔🛵`;
+                            caricaImpostazioni();
+                            caricaReparti().then(() => caricaUtenti());
+                        }
                     } else {
                         alert(data.message);
                     }
@@ -248,11 +314,13 @@
         window.cambiaAttivita = function() {
             utenteLoggato = null;
             aziendaCorrenteId = null;
+            superadminToken = null;
             turniGlobal = [];
             
             document.getElementById('contenuto-app').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('user-info').classList.remove('flex');
+            document.getElementById('btn-torna-superadmin').classList.add('hidden');
             
             const formLogin = document.getElementById('form-login');
             formLogin.classList.remove('hidden');
@@ -279,6 +347,10 @@
             .then(res => res.json()).then(data => {
                 if (data.success) {
                     utenteLoggato = data.utente;
+                    if (data.superadminToken) {
+                        superadminToken = data.superadminToken;
+                    }
+
                     document.getElementById('form-login').classList.remove('flex');
                     document.getElementById('form-login').classList.add('hidden');
                     
@@ -288,23 +360,142 @@
                     
                     document.getElementById('contenuto-app').classList.remove('hidden');
                     
-                    if(utenteLoggato.ruolo === 'manager') {
-                        document.getElementById('sezione-manager').classList.remove('hidden');
-                        document.getElementById('sezione-staff').classList.add('hidden');
-                        caricaStatisticheMensili();
+                    if (utenteLoggato.ruolo === 'superadmin') {
+                        mostraPannelloSuperAdmin();
+                    } else if (utenteLoggato.ruolo === 'manager') {
+                        attivaVistaAzienda('manager');
                     } else {
-                        document.getElementById('sezione-manager').classList.add('hidden');
-                        document.getElementById('sezione-staff').classList.remove('hidden');
+                        attivaVistaAzienda('staff');
                     }
-                    
-                    caricaVeicoli().then(() => caricaTurni());
                 } else alert(data.message);
             });
         });
+
+        function mostraPannelloSuperAdmin() {
+            aziendaCorrenteId = 0;
+            document.getElementById('header-business').innerHTML = 'Console Super Admin 👑';
+            document.getElementById('page-title').textContent = 'Super Admin - Gestionale Turni';
+            document.getElementById('btn-torna-superadmin').classList.add('hidden');
+
+            document.getElementById('sezione-superadmin').classList.remove('hidden');
+            document.getElementById('sezione-manager').classList.add('hidden');
+            document.getElementById('sezione-staff').classList.add('hidden');
+            document.getElementById('bacheca-turni').classList.add('hidden');
+
+            caricaAziendeSuperAdmin();
+        }
+
+        function attivaVistaAzienda(ruolo) {
+            document.getElementById('sezione-superadmin').classList.add('hidden');
+            document.getElementById('bacheca-turni').classList.remove('hidden');
+
+            if (superadminToken) {
+                document.getElementById('btn-torna-superadmin').classList.remove('hidden');
+            }
+
+            if (ruolo === 'manager') {
+                document.getElementById('sezione-manager').classList.remove('hidden');
+                document.getElementById('sezione-staff').classList.add('hidden');
+                caricaStatisticheMensili();
+            } else {
+                document.getElementById('sezione-manager').classList.add('hidden');
+                document.getElementById('sezione-staff').classList.remove('hidden');
+            }
+            
+            caricaVeicoli().then(() => caricaTurni());
+        }
+
+        window.tornaSuperAdmin = function() {
+            utenteLoggato = { id: 0, nome: 'Super Admin', ruolo: 'superadmin', azienda_id: 0 };
+            mostraPannelloSuperAdmin();
+        };
         
         window.eseguiLogout = () => location.reload();
 
-        // --- CARICAMENTO DATI ---
+        // --- FUNZIONI SUPER ADMIN ---
+        function caricaAziendeSuperAdmin() {
+            apiFetch('/api/superadmin/aziende')
+                .then(res => res.json())
+                .then(aziende => {
+                    const tbody = document.getElementById('tabella-aziende-sa');
+                    tbody.innerHTML = '';
+
+                    if (!Array.isArray(aziende) || aziende.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Nessuna attività presente.</td></tr>`;
+                        return;
+                    }
+
+                    aziende.forEach(az => {
+                        tbody.innerHTML += `
+                            <tr class="border-b hover:bg-gray-50">
+                                <td class="p-3">
+                                    <span class="bg-yellow-400 text-gray-900 font-bold px-2.5 py-1 rounded-md text-sm">#${az.id}</span>
+                                </td>
+                                <td class="p-3 font-bold text-gray-900">${az.emoji_business || '🏢'} ${az.nome_locale}</td>
+                                <td class="p-3 text-center text-sm text-gray-600">${az.totale_utenti}</td>
+                                <td class="p-3 text-center text-sm text-gray-600">${az.totale_turni}</td>
+                                <td class="p-3 text-right flex justify-end gap-2">
+                                    <button onclick="entraInAziendaSuperAdmin(${az.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🔑 Gestisci</button>
+                                    <button onclick="eliminaAziendaSuperAdmin(${az.id}, '${az.nome_locale.replace(/'/g, "\\'")}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🗑️</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                });
+        }
+
+        document.getElementById('form-nuova-azienda').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const payload = {
+                codice: document.getElementById('sa-codice').value,
+                nome_locale: document.getElementById('sa-nome').value,
+                emoji_business: document.getElementById('sa-emoji').value,
+                password_titolare: document.getElementById('sa-password').value
+            };
+
+            apiFetch('/api/superadmin/aziende', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Attività "${payload.nome_locale}" creata con Codice #${payload.codice}!`);
+                    e.target.reset();
+                    document.getElementById('sa-emoji').value = '🍕';
+                    document.getElementById('sa-password').value = 'admin123';
+                    caricaAziendeSuperAdmin();
+                } else {
+                    alert(data.message || "Errore nella creazione dell'attività.");
+                }
+            });
+        });
+
+        window.entraInAziendaSuperAdmin = function(id) {
+            apiFetch(`/api/superadmin/accedi-azienda/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        aziendaCorrenteId = data.azienda.id;
+                        utenteLoggato = data.utente;
+                        caricaImpostazioni();
+                        caricaReparti().then(() => caricaUtenti());
+                        attivaVistaAzienda('manager');
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        };
+
+        window.eliminaAziendaSuperAdmin = function(id, nome) {
+            if (confirm(`ATTENZIONE: Vuoi eliminare definitivamente l'attività "${nome}" (#${id}) e tutti i suoi turni, utenti e reparti?`)) {
+                apiFetch(`/api/superadmin/aziende/${id}`, { method: 'DELETE' })
+                    .then(() => caricaAziendeSuperAdmin());
+            }
+        };
+
+        // --- CARICAMENTO DATI ATTIVITÀ ---
         function caricaImpostazioni() {
             return apiFetch('/api/impostazioni').then(res => res.json()).then(data => {
                 const titolo = `${data.nome_business || 'Gestionale Turni'} ${data.emoji_business || ''}`;
@@ -469,7 +660,7 @@
         };
 
         function caricaTurni() {
-            if (!utenteLoggato) return;
+            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') return;
             apiFetch('/api/turni').then(res => res.json()).then(turni => {
                 turniGlobal = turni; 
                 const filtroRepartoVal = document.getElementById('filtro-reparto').value;

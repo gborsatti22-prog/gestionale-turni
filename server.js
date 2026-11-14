@@ -6,6 +6,9 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const SUPERADMIN_CODE = 0;
+const SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || 'superadmin123';
+
 app.use(express.json());
 app.use(cors());
 app.use(express.static('public'));
@@ -52,13 +55,13 @@ function creaTabelle() {
 
 function controllaDatiIniziali() {
     pool.query("SELECT COUNT(*) AS count FROM aziende", (err, result) => {
-        if (!err && parseInt(result.rows[0].count) === 0) {
-            pool.query("INSERT INTO aziende (nome_locale) VALUES ('La Mia Pizzeria')");
+        if (!err && parseInt(result.rows[0].count, 10) === 0) {
+            pool.query("INSERT INTO aziende (id, nome_locale) VALUES (1, 'La Mia Pizzeria')");
         }
     });
 
     pool.query("SELECT COUNT(*) AS count FROM utenti", (err, result) => {
-        if (!err && parseInt(result.rows[0].count) === 0) {
+        if (!err && parseInt(result.rows[0].count, 10) === 0) {
             pool.query("INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', 'admin123', 1)");
             pool.query("INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ('Gestionale Turni', '🍔🛵', 1)");
             console.log("Dati iniziali inseriti.");
@@ -66,14 +69,23 @@ function controllaDatiIniziali() {
     });
 }
 
-// --- MIDDLEWARE DI SICUREZZA MULTI-TENANT ---
+// --- MIDDLEWARE DI SICUREZZA MULTI-TENANT & SUPER ADMIN ---
 app.use('/api', (req, res, next) => {
     if (req.path.startsWith('/verifica-azienda') || req.path === '/login') {
         return next();
     }
+
+    // Rotte riservate al Super Admin
+    if (req.path.startsWith('/superadmin')) {
+        const token = req.headers['x-superadmin-token'];
+        if (token !== SUPERADMIN_PASS) {
+            return res.status(403).json({ error: "Accesso negato: privilegi Super Admin richiesti." });
+        }
+        return next();
+    }
     
     const aziendaId = req.headers['x-azienda-id'];
-    if (!aziendaId) {
+    if (aziendaId === undefined || aziendaId === null || aziendaId === '') {
         return res.status(401).json({ error: "Accesso negato: Codice Azienda mancante." });
     }
     
@@ -81,20 +93,166 @@ app.use('/api', (req, res, next) => {
     next();
 });
 
-// --- API ENDPOINTS ---
-
-// VERIFICA CODICE ATTIVITÀ
+// --- API VERIFICA CODICE & LOGIN ---
 app.get('/api/verifica-azienda/:codice', async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [req.params.codice]);
-        if (result.rows.length > 0) res.json({ success: true, azienda: result.rows[0] });
-        else res.json({ success: false, message: "Codice attività inesistente." });
+        const codiceNum = parseInt(req.params.codice, 10);
+        if (codiceNum === SUPERADMIN_CODE) {
+            return res.json({
+                success: true,
+                isSuperAdmin: true,
+                azienda: { id: SUPERADMIN_CODE, nome_locale: 'Console Super Admin' }
+            });
+        }
+
+        const result = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [codiceNum]);
+        if (result.rows.length > 0) {
+            res.json({ success: true, isSuperAdmin: false, azienda: result.rows[0] });
+        } else {
+            res.json({ success: false, message: "Codice attività inesistente." });
+        }
     } catch (err) { 
         res.status(500).json({ error: err.message }); 
     }
 });
 
-// IMPOSTAZIONI
+app.post('/api/login', async (req, res) => {
+    try {
+        const { utente_id, password } = req.body;
+
+        // Login Super Admin
+        if (utente_id === 'superadmin') {
+            if (password === SUPERADMIN_PASS) {
+                return res.json({
+                    success: true,
+                    utente: { id: 0, nome: 'Super Admin', ruolo: 'superadmin', reparto: 'Sistema', azienda_id: 0 },
+                    superadminToken: SUPERADMIN_PASS
+                });
+            } else {
+                return res.json({ success: false, message: "Password Super Admin errata" });
+            }
+        }
+
+        // Login Utente Standard
+        const result = await pool.query(
+            "SELECT id, nome, ruolo, reparto, azienda_id FROM utenti WHERE id = $1 AND password = $2", 
+            [utente_id, password]
+        );
+        if (result.rows.length > 0) res.json({ success: true, utente: result.rows[0] });
+        else res.json({ success: false, message: "Password errata" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- API SUPER ADMIN ---
+app.get('/api/superadmin/aziende', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                a.id, 
+                a.nome_locale,
+                i.emoji_business,
+                (SELECT COUNT(*)::int FROM utenti u WHERE u.azienda_id = a.id) AS totale_utenti,
+                (SELECT COUNT(*)::int FROM turni t WHERE t.azienda_id = a.id) AS totale_turni
+            FROM aziende a
+            LEFT JOIN impostazioni i ON i.azienda_id = a.id
+            ORDER BY a.id ASC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/superadmin/aziende', async (req, res) => {
+    try {
+        const { codice, nome_locale, emoji_business, password_titolare } = req.body;
+        const codiceNum = parseInt(codice, 10);
+
+        if (isNaN(codiceNum) || codiceNum <= 0) {
+            return res.json({ success: false, message: "Il codice attività deve essere un numero maggiore di 0 (lo 0 è riservato al Super Admin)." });
+        }
+        if (!nome_locale || !nome_locale.trim()) {
+            return res.json({ success: false, message: "Inserisci il nome dell'attività." });
+        }
+
+        const esistente = await pool.query("SELECT id FROM aziende WHERE id = $1", [codiceNum]);
+        if (esistente.rows.length > 0) {
+            return res.json({ success: false, message: `Il codice #${codiceNum} è già assegnato a un'altra attività!` });
+        }
+
+        const nomePulito = nome_locale.trim();
+        const emojiPulita = (emoji_business && emoji_business.trim()) ? emoji_business.trim() : '🏢';
+        const passTitolare = (password_titolare && password_titolare.trim()) ? password_titolare.trim() : 'admin123';
+
+        // 1. Crea l'azienda con il codice scelto
+        await pool.query("INSERT INTO aziende (id, nome_locale) VALUES ($1, $2)", [codiceNum, nomePulito]);
+        // Allinea la sequenza SERIAL di PostgreSQL
+        await pool.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
+
+        // 2. Crea le impostazioni base dell'attività
+        await pool.query(
+            "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ($1, $2, $3)",
+            [nomePulito, emojiPulita, codiceNum]
+        );
+
+        // 3. Crea l'account Titolare iniziale (reparti, veicoli, turni e staff restano completamente vuoti)
+        await pool.query(
+            "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', $1, $2)",
+            [passTitolare, codiceNum]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Errore creazione azienda:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/superadmin/aziende/:id', async (req, res) => {
+    try {
+        const idNum = parseInt(req.params.id, 10);
+        await pool.query("DELETE FROM turni WHERE azienda_id = $1", [idNum]);
+        await pool.query("DELETE FROM veicoli WHERE azienda_id = $1", [idNum]);
+        await pool.query("DELETE FROM reparti WHERE azienda_id = $1", [idNum]);
+        await pool.query("DELETE FROM utenti WHERE azienda_id = $1", [idNum]);
+        await pool.query("DELETE FROM impostazioni WHERE azienda_id = $1", [idNum]);
+        await pool.query("DELETE FROM aziende WHERE id = $1", [idNum]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Permette al Super Admin di entrare direttamente nella gestione di un'attività
+app.post('/api/superadmin/accedi-azienda/:id', async (req, res) => {
+    try {
+        const idNum = parseInt(req.params.id, 10);
+        const azRes = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [idNum]);
+        if (azRes.rows.length === 0) {
+            return res.json({ success: false, message: "Attività non trovata." });
+        }
+
+        const mgrRes = await pool.query(
+            "SELECT id, nome, ruolo, reparto, azienda_id FROM utenti WHERE azienda_id = $1 AND ruolo = 'manager' ORDER BY id ASC LIMIT 1",
+            [idNum]
+        );
+
+        const managerUtente = mgrRes.rows[0] || {
+            id: 0,
+            nome: 'Super Admin (Titolare)',
+            ruolo: 'manager',
+            reparto: 'Tutti',
+            azienda_id: idNum
+        };
+
+        res.json({ success: true, azienda: azRes.rows[0], utente: managerUtente });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- API IMPOSTAZIONI ---
 app.get('/api/impostazioni', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [req.azienda_id]);
@@ -109,11 +267,15 @@ app.put('/api/impostazioni', async (req, res) => {
             "UPDATE impostazioni SET nome_business = $1, emoji_business = $2 WHERE azienda_id = $3", 
             [nome_business, emoji_business, req.azienda_id]
         );
+        await pool.query(
+            "UPDATE aziende SET nome_locale = $1 WHERE id = $2",
+            [nome_business, req.azienda_id]
+        );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// REPARTI
+// --- API REPARTI ---
 app.get('/api/reparti', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM reparti WHERE azienda_id = $1", [req.azienda_id]);
@@ -138,7 +300,7 @@ app.delete('/api/reparti/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// UTENTI & LOGIN
+// --- API UTENTI ---
 app.get('/api/utenti', async (req, res) => {
     try {
         const result = await pool.query("SELECT id, nome, ruolo, reparto FROM utenti WHERE azienda_id = $1", [req.azienda_id]);
@@ -164,19 +326,7 @@ app.delete('/api/utenti/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/login', async (req, res) => {
-    try {
-        const { utente_id, password } = req.body;
-        const result = await pool.query(
-            "SELECT id, nome, ruolo, reparto, azienda_id FROM utenti WHERE id = $1 AND password = $2", 
-            [utente_id, password]
-        );
-        if (result.rows.length > 0) res.json({ success: true, utente: result.rows[0] });
-        else res.json({ success: false, message: "Password errata" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// VEICOLI
+// --- API VEICOLI ---
 app.get('/api/veicoli', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM veicoli WHERE azienda_id = $1", [req.azienda_id]);
@@ -201,7 +351,7 @@ app.delete('/api/veicoli/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// TURNI
+// --- API TURNI ---
 app.get('/api/turni', async (req, res) => {
     try {
         const query = `
@@ -220,28 +370,25 @@ app.get('/api/turni', async (req, res) => {
 
 app.post('/api/turni', async (req, res) => {
     try {
-        // BUG 1 FIXATO: Leggiamo 'ricorrenza' anziché 'settimane' come ci manda il frontend
         let { giorno, orario, utente_id, veicolo_id, ricorrenza, stato } = req.body;
         
-        let numSettimane = parseInt(ricorrenza) || 1;
-        // BUG 2 FIXATO: Se veicolo_id è una stringa vuota, trasformalo in null per Postgres
-        let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id) : null;
+        let numSettimane = parseInt(ricorrenza, 10) || 1;
+        let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id, 10) : null;
 
-        // Ricavo in automatico il reparto associato a questo utente
         const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
         let reparto = uRes.rows.length > 0 ? uRes.rows[0].reparto : null;
 
-        let dataCorrente = new Date(giorno);
+        const [anno, mese, day] = giorno.split('-').map(Number);
+        let dataCorrente = new Date(Date.UTC(anno, mese - 1, day));
         
         for (let i = 0; i < numSettimane; i++) {
-            // FIX per evitare spostamenti di timezone
-            let dataGiorno = new Date(dataCorrente.getTime() - (dataCorrente.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            let dataGiorno = dataCorrente.toISOString().split('T')[0];
             
             await pool.query(
                 "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
                 [dataGiorno, orario, utente_id, reparto, idVeicoloSafe, stato, req.azienda_id]
             );
-            dataCorrente.setDate(dataCorrente.getDate() + 7);
+            dataCorrente.setUTCDate(dataCorrente.getUTCDate() + 7);
         }
         res.json({ success: true });
     } catch (err) { 
@@ -257,7 +404,17 @@ app.delete('/api/turni/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ROTTA AGGIUNTA: Modifica orario (chiamata dal tasto "✏️ Modifica Orario")
+app.put('/api/turni/:id', async (req, res) => {
+    try {
+        const { giorno, orario, utente_id, reparto, veicolo_id } = req.body;
+        await pool.query(
+            "UPDATE turni SET giorno = $1, orario = $2, utente_id = $3, reparto = $4, veicolo_id = $5 WHERE id = $6 AND azienda_id = $7", 
+            [giorno, orario, utente_id, reparto, veicolo_id || null, req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.put('/api/turni/:id/orario', async (req, res) => {
     try {
         await pool.query(
@@ -268,7 +425,6 @@ app.put('/api/turni/:id/orario', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ROTTA AGGIUNTA: Conferma proposta (chiamata dal tasto "✅ Conferma")
 app.put('/api/turni/:id/conferma', async (req, res) => {
     try {
         await pool.query("UPDATE turni SET stato = 'confermato' WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
@@ -285,39 +441,49 @@ app.put('/api/turni/:id/stato', async (req, res) => {
 
 // FUNZIONE CALCOLO ORE
 function calcolaOreTurno(orarioStr) {
-    if (!orarioStr || !orarioStr.includes('-')) return 0;
-    try {
-        const [inizio, fine] = orarioStr.split('-').map(s => s.trim());
-        const [hInizio, mInizio] = inizio.split(':').map(Number);
-        const [hFine, mFine] = fine.split(':').map(Number);
-        let dataInizio = new Date(2000, 0, 1, hInizio, mInizio || 0);
-        let dataFine = new Date(2000, 0, 1, hFine, mFine || 0);
-        
-        // Se il turno finisce dopo mezzanotte
-        if (dataFine < dataInizio) dataFine.setDate(dataFine.getDate() + 1);
-        
-        return (dataFine - dataInizio) / (1000 * 60 * 60);
-    } catch (e) { return 0; }
+    if (!orarioStr) return 0;
+    const match = String(orarioStr).match(/(\d{1,2})(?:[:.](\d{2}))?\s*(?:-|–|—|\/|alle|a)\s*(\d{1,2})(?:[:.](\d{2}))?/i);
+    if (!match) return 0;
+
+    const hInizio = parseInt(match[1], 10);
+    const mInizio = parseInt(match[2] || '0', 10);
+    const hFine = parseInt(match[3], 10);
+    const mFine = parseInt(match[4] || '0', 10);
+
+    if (isNaN(hInizio) || isNaN(hFine)) return 0;
+
+    let minutiInizio = hInizio * 60 + mInizio;
+    let minutiFine = hFine * 60 + mFine;
+
+    if (minutiFine <= minutiInizio) {
+        minutiFine += 24 * 60;
+    }
+
+    return (minutiFine - minutiInizio) / 60;
 }
 
 // STATISTICHE MENSILI
 app.get('/api/statistiche/mensili', async (req, res) => {
     try {
-        const mese = req.query.mese; 
+        const mese = req.query.mese;
+        if (!mese) return res.json([]);
+
         const query = `
             SELECT u.id, u.nome, u.reparto, t.orario
             FROM utenti u
             LEFT JOIN turni t ON u.id = t.utente_id 
                 AND t.giorno LIKE $1
-                AND t.stato = 'confermato' -- BUG 4 FIXATO (prima era 'assegnato')
+                AND t.stato IN ('confermato', 'assegnato')
                 AND t.azienda_id = $2
             WHERE u.ruolo != 'manager' AND u.azienda_id = $2
         `;
-        const result = await pool.query(query, [`${mese}-%`, req.azienda_id]);
+        const result = await pool.query(query, [`${mese}-%`, Number(req.azienda_id)]);
         
         const statistiche = {};
         result.rows.forEach(row => {
-            if (!statistiche[row.id]) statistiche[row.id] = { nome: row.nome, reparto: row.reparto, totale_turni: 0, totale_ore: 0 };
+            if (!statistiche[row.id]) {
+                statistiche[row.id] = { nome: row.nome, reparto: row.reparto, totale_turni: 0, totale_ore: 0 };
+            }
             if (row.orario) { 
                 statistiche[row.id].totale_turni += 1;
                 statistiche[row.id].totale_ore += calcolaOreTurno(row.orario);
