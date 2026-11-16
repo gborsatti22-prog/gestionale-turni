@@ -113,7 +113,7 @@
                         <option value="">-- Scegli dipendente --</option>
                     </select>
                     
-                    <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400">
+                    <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400 font-medium">
                         <option value="">-- Nessun Mezzo --</option>
                     </select>
 
@@ -165,10 +165,12 @@
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
                     <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
-                    <form id="form-nuovo-reparto" class="flex gap-2 mb-4">
+                    <form id="form-nuovo-reparto" class="flex gap-2 mb-4 items-center">
                         <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-grow outline-none" placeholder="es. Sala, Cucina, Rider">
-                        <label class="flex items-center text-xs font-bold"><input type="checkbox" id="nuovo-reparto-veicolo" class="mr-1"> Mezzo</label>
-                        <button type="submit" class="bg-amber-500 text-white px-4 rounded-lg font-bold">+</button>
+                        <label class="flex items-center gap-1 text-xs font-bold cursor-pointer bg-yellow-50 border border-yellow-300 px-2.5 py-2 rounded-lg select-none" title="Se spuntato, i turni di questo reparto permettono di scegliere un veicolo">
+                            <input type="checkbox" id="nuovo-reparto-veicolo"> 🚗 Mezzo
+                        </label>
+                        <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold">+</button>
                     </form>
                     <table class="w-full text-left text-sm"><tbody id="tabella-reparti"></tbody></table>
                 </div>
@@ -403,7 +405,9 @@
                 document.getElementById('sezione-staff').classList.remove('hidden');
             }
             
-            caricaVeicoli().then(() => caricaTurni());
+            Promise.all([caricaReparti(), caricaVeicoli()])
+                .then(() => caricaUtenti())
+                .then(() => caricaTurni());
         }
 
         window.tornaSuperAdmin = function() {
@@ -514,7 +518,6 @@
                         aziendaCorrenteId = data.azienda.id;
                         utenteLoggato = data.utente;
                         caricaImpostazioni();
-                        caricaReparti().then(() => caricaUtenti());
                         attivaVistaAzienda('manager');
                     } else {
                         alert(data.message);
@@ -554,14 +557,35 @@
                 tabellaReparti.innerHTML = '';
 
                 reparti.forEach(r => {
+                    const usaMezzo = Boolean(r.richiede_veicolo && r.richiede_veicolo !== 'false' && r.richiede_veicolo !== '0');
                     selectReparto.innerHTML += `<option value="${r.nome}">${r.nome}</option>`;
                     filtroReparto.innerHTML += `<option value="${r.nome}">Reparto: ${r.nome}</option>`;
                     tabellaReparti.innerHTML += `
-                        <tr class="border-b"><td class="p-2">${r.nome}</td><td class="p-2 text-right">
-                        <button onclick="eliminaReparto(${r.id})" class="text-red-500">🗑️</button></td></tr>`;
+                        <tr class="border-b">
+                            <td class="p-2 font-medium">${r.nome}</td>
+                            <td class="p-2 text-center">
+                                <button type="button" onclick="toggleMezzoReparto(${r.id}, ${!usaMezzo})" class="text-xs font-bold px-2.5 py-1 rounded-full transition ${usaMezzo ? 'bg-yellow-100 text-yellow-800 border border-yellow-400 hover:bg-yellow-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}" title="Clicca per attivare o disattivare la scelta del mezzo in questo reparto">
+                                    ${usaMezzo ? '🚗 Mezzo: SÌ' : 'Mezzo: NO'}
+                                </button>
+                            </td>
+                            <td class="p-2 text-right">
+                                <button type="button" onclick="eliminaReparto(${r.id})" class="text-red-500">🗑️</button>
+                            </td>
+                        </tr>`;
                 });
             });
         }
+
+        window.toggleMezzoReparto = function(id, nuovoStato) {
+            apiFetch(`/api/reparti/${id}/veicolo`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ richiede_veicolo: nuovoStato })
+            })
+            .then(() => caricaReparti())
+            .then(() => caricaUtenti())
+            .then(() => controllaReparto());
+        };
 
         function caricaUtenti() {
             return apiFetch('/api/utenti').then(res => res.json()).then(utenti => {
@@ -570,6 +594,8 @@
                 const selettoreDipendente = document.getElementById('selettore-dipendente');
                 const tabellaUtenti = document.getElementById('tabella-utenti');
                 
+                const dipendenteSelezionatoPrima = selettoreDipendente.value;
+                
                 loginSelect.innerHTML = '<option value="">-- Chi sei? --</option>';
                 selettoreDipendente.innerHTML = '<option value="">-- Scegli dipendente --</option>';
                 tabellaUtenti.innerHTML = '';
@@ -577,13 +603,20 @@
                 utenti.forEach(utente => {
                     loginSelect.innerHTML += `<option value="${utente.id}">${utente.nome}</option>`;
                     if(utente.ruolo !== 'manager') {
-                        const rInfo = listaRepartiGlobal.find(r => r.nome === utente.reparto);
-                        const v = rInfo?.richiede_veicolo ? "1" : "0";
-                        selettoreDipendente.innerHTML += `<option value="${utente.id}" data-reparto="${utente.reparto}" data-richiede-veicolo="${v}">${utente.nome} (${utente.reparto})</option>`;
+                        const repUtente = (utente.reparto || '').trim().toLowerCase();
+                        const rInfo = listaRepartiGlobal.find(r => (r.nome || '').trim().toLowerCase() === repUtente);
+                        const usaMezzo = rInfo && Boolean(rInfo.richiede_veicolo && rInfo.richiede_veicolo !== 'false' && rInfo.richiede_veicolo !== '0');
+                        const v = usaMezzo ? "1" : "0";
+                        selettoreDipendente.innerHTML += `<option value="${utente.id}" data-reparto="${utente.reparto || ''}" data-richiede-veicolo="${v}">${utente.nome} (${utente.reparto || 'Nessun reparto'})</option>`;
                     }
                     tabellaUtenti.innerHTML += `<tr class="border-b"><td class="p-2">${utente.nome} (${utente.ruolo})</td><td class="p-2 text-right">
                     ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500">🗑️</button>` : 'Tu'}</td></tr>`;
                 });
+
+                if (dipendenteSelezionatoPrima) {
+                    selettoreDipendente.value = dipendenteSelezionatoPrima;
+                    controllaReparto();
+                }
 
                 if (utenteLoggato?.ruolo === 'manager') {
                     caricaStatisticheMensili();
@@ -596,7 +629,9 @@
                 listaVeicoliGlobal = veicoli;
                 const selVeicolo = document.getElementById('selettore-veicolo');
                 const tabVeicoli = document.getElementById('tabella-veicoli');
-                selVeicolo.innerHTML = '<option value="">-- Nessun Mezzo --</option>';
+                selVeicolo.innerHTML = veicoli.length > 0
+                    ? '<option value="">-- Nessun Mezzo --</option>'
+                    : '<option value="">-- Nessun Mezzo (aggiungili in Risorse) --</option>';
                 tabVeicoli.innerHTML = '';
 
                 veicoli.forEach(v => {
@@ -643,14 +678,24 @@
         window.controllaReparto = () => { 
             const s = document.getElementById('selettore-dipendente'); 
             const v = document.getElementById('selettore-veicolo'); 
-            if(s.selectedIndex>0){ 
-                v.classList.toggle('hidden', s.options[s.selectedIndex].dataset.richiedeVeicolo !== "1"); 
-            } 
+            if (s.selectedIndex > 0) { 
+                const opt = s.options[s.selectedIndex];
+                const repNome = (opt.dataset.reparto || '').trim().toLowerCase();
+                const rInfo = listaRepartiGlobal.find(r => (r.nome || '').trim().toLowerCase() === repNome);
+                const richiede = rInfo
+                    ? Boolean(rInfo.richiede_veicolo && rInfo.richiede_veicolo !== 'false' && rInfo.richiede_veicolo !== '0')
+                    : (opt.dataset.richiedeVeicolo === "1");
+                v.classList.toggle('hidden', !richiede);
+                if (!richiede) v.value = "";
+            } else {
+                v.classList.add('hidden');
+                v.value = "";
+            }
         };
 
         document.getElementById('form-turno').addEventListener('submit', e => { 
             e.preventDefault(); 
-            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: document.getElementById('giorno').value, orario: document.getElementById('orario').value, utente_id: document.getElementById('selettore-dipendente').value, veicolo_id: document.getElementById('selettore-veicolo').value, ricorrenza: document.getElementById('settimane-ricorrenza').value, stato: 'confermato' }) }).then(() => { caricaTurni(); e.target.reset(); }); 
+            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: document.getElementById('giorno').value, orario: document.getElementById('orario').value, utente_id: document.getElementById('selettore-dipendente').value, veicolo_id: document.getElementById('selettore-veicolo').value, ricorrenza: document.getElementById('settimane-ricorrenza').value, stato: 'confermato' }) }).then(() => { caricaTurni(); e.target.reset(); controllaReparto(); }); 
         });
 
         document.getElementById('form-proponi-turno').addEventListener('submit', e => { 
@@ -774,7 +819,6 @@
             const [anno, mese] = meseVal.split('-').map(Number);
 
             const primoGiorno = new Date(anno, mese - 1, 1);
-            // Lunedi = 0, ..., Domenica = 6
             const offsetInizio = (primoGiorno.getDay() + 6) % 7;
             const giorniNelMese = new Date(anno, mese, 0).getDate();
 
@@ -798,12 +842,10 @@
 
             html += `<div class="grid grid-cols-7 bg-gray-200 gap-px">`;
 
-            // Celle vuote iniziali
             for (let i = 0; i < offsetInizio; i++) {
                 html += `<div class="bg-gray-50 min-h-[120px] p-2"></div>`;
             }
 
-            // Celle dei giorni del mese
             for (let giorno = 1; giorno <= giorniNelMese; giorno++) {
                 const dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(giorno).padStart(2, '0')}`;
                 const isOggi = dataStr === oggiStr;
@@ -858,7 +900,6 @@
                 html += `</div>`;
             }
 
-            // Celle vuote finali per completare l'ultima riga
             const totaleCelle = offsetInizio + giorniNelMese;
             const resto = totaleCelle % 7;
             if (resto !== 0) {

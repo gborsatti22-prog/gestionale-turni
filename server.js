@@ -75,7 +75,6 @@ app.use('/api', (req, res, next) => {
         return next();
     }
 
-    // Rotte riservate al Super Admin
     if (req.path.startsWith('/superadmin')) {
         const token = req.headers['x-superadmin-token'];
         if (token !== SUPERADMIN_PASS) {
@@ -120,7 +119,6 @@ app.post('/api/login', async (req, res) => {
     try {
         const { utente_id, password } = req.body;
 
-        // Login Super Admin
         if (utente_id === 'superadmin') {
             if (password === SUPERADMIN_PASS) {
                 return res.json({
@@ -133,7 +131,6 @@ app.post('/api/login', async (req, res) => {
             }
         }
 
-        // Login Utente Standard
         const result = await pool.query(
             "SELECT id, nome, ruolo, reparto, azienda_id FROM utenti WHERE id = $1 AND password = $2", 
             [utente_id, password]
@@ -205,7 +202,6 @@ app.post('/api/superadmin/aziende', async (req, res) => {
     }
 });
 
-// Cambia il codice identificativo di un'attività esistente e aggiorna tutti i dati collegati
 app.put('/api/superadmin/aziende/:id/codice', async (req, res) => {
     const vecchioCodice = parseInt(req.params.id, 10);
     const nuovoCodice = parseInt(req.body.nuovo_codice, 10);
@@ -321,16 +317,27 @@ app.put('/api/impostazioni', async (req, res) => {
 // --- API REPARTI ---
 app.get('/api/reparti', async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM reparti WHERE azienda_id = $1", [req.azienda_id]);
+        const result = await pool.query("SELECT * FROM reparti WHERE azienda_id = $1 ORDER BY id ASC", [req.azienda_id]);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/reparti', async (req, res) => {
     try {
+        const nomePulito = (req.body.nome || '').trim();
         await pool.query(
             "INSERT INTO reparti (nome, richiede_veicolo, azienda_id) VALUES ($1, $2, $3)", 
-            [req.body.nome, req.body.richiede_veicolo, req.azienda_id]
+            [nomePulito, Boolean(req.body.richiede_veicolo), req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/reparti/:id/veicolo', async (req, res) => {
+    try {
+        await pool.query(
+            "UPDATE reparti SET richiede_veicolo = $1 WHERE id = $2 AND azienda_id = $3",
+            [Boolean(req.body.richiede_veicolo), req.params.id, req.azienda_id]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -346,7 +353,7 @@ app.delete('/api/reparti/:id', async (req, res) => {
 // --- API UTENTI ---
 app.get('/api/utenti', async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, nome, ruolo, reparto FROM utenti WHERE azienda_id = $1", [req.azienda_id]);
+        const result = await pool.query("SELECT id, nome, ruolo, reparto FROM utenti WHERE azienda_id = $1 ORDER BY id ASC", [req.azienda_id]);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -356,7 +363,7 @@ app.post('/api/utenti', async (req, res) => {
         const { nome, ruolo, reparto, password } = req.body;
         await pool.query(
             "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ($1, $2, $3, $4, $5)", 
-            [nome, ruolo, reparto, password, req.azienda_id]
+            [(nome || '').trim(), ruolo, (reparto || '').trim(), password, req.azienda_id]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -372,7 +379,7 @@ app.delete('/api/utenti/:id', async (req, res) => {
 // --- API VEICOLI ---
 app.get('/api/veicoli', async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM veicoli WHERE azienda_id = $1", [req.azienda_id]);
+        const result = await pool.query("SELECT * FROM veicoli WHERE azienda_id = $1 ORDER BY id ASC", [req.azienda_id]);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -381,7 +388,7 @@ app.post('/api/veicoli', async (req, res) => {
     try {
         await pool.query(
             "INSERT INTO veicoli (nome, tipo, azienda_id) VALUES ($1, $2, $3)", 
-            [req.body.nome, req.body.tipo, req.azienda_id]
+            [(req.body.nome || '').trim(), req.body.tipo, req.azienda_id]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
