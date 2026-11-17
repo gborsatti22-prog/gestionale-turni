@@ -69,6 +69,17 @@ function controllaDatiIniziali() {
     });
 }
 
+function parseCompitiList(repartoStr) {
+    if (!repartoStr) return [];
+    return String(repartoStr)
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
+// --- HEALTHCHECK LEGGERO (NON TOCCA IL DB) ---
+app.get('/ping', (req, res) => res.status(200).send('OK'));
+
 // --- MIDDLEWARE DI SICUREZZA MULTI-TENANT & SUPER ADMIN ---
 app.use('/api', (req, res, next) => {
     if (req.path.startsWith('/verifica-azienda') || req.path === '/login') {
@@ -314,7 +325,7 @@ app.put('/api/impostazioni', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- API REPARTI ---
+// --- API REPARTI / COMPITI ---
 app.get('/api/reparti', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM reparti WHERE azienda_id = $1 ORDER BY id ASC", [req.azienda_id]);
@@ -360,12 +371,35 @@ app.get('/api/utenti', async (req, res) => {
 
 app.post('/api/utenti', async (req, res) => {
     try {
-        const { nome, ruolo, reparto, password } = req.body;
+        const { nome, ruolo, reparto, reparti, password } = req.body;
+        let repartoFinale = '';
+        if (Array.isArray(reparti) && reparti.length > 0) {
+            repartoFinale = reparti.map(r => String(r).trim()).filter(Boolean).join(', ');
+        } else {
+            repartoFinale = (reparto || '').trim();
+        }
         await pool.query(
             "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ($1, $2, $3, $4, $5)", 
-            [(nome || '').trim(), ruolo, (reparto || '').trim(), password, req.azienda_id]
+            [(nome || '').trim(), ruolo, repartoFinale, password, req.azienda_id]
         );
         res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/utenti/:id/reparti', async (req, res) => {
+    try {
+        const { reparti, reparto } = req.body;
+        let repartoFinale = '';
+        if (Array.isArray(reparti)) {
+            repartoFinale = reparti.map(r => String(r).trim()).filter(Boolean).join(', ');
+        } else {
+            repartoFinale = (reparto || '').trim();
+        }
+        await pool.query(
+            "UPDATE utenti SET reparto = $1 WHERE id = $2 AND azienda_id = $3",
+            [repartoFinale, req.params.id, req.azienda_id]
+        );
+        res.json({ success: true, reparto: repartoFinale });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -401,7 +435,7 @@ app.delete('/api/veicoli/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- API TURNI ---
+// --- API TURNI & SCAMBI ---
 app.get('/api/turni', async (req, res) => {
     try {
         const query = `
@@ -420,13 +454,17 @@ app.get('/api/turni', async (req, res) => {
 
 app.post('/api/turni', async (req, res) => {
     try {
-        let { giorno, orario, utente_id, veicolo_id, ricorrenza, stato } = req.body;
+        let { giorno, orario, utente_id, reparto, veicolo_id, ricorrenza, stato } = req.body;
         
         let numSettimane = parseInt(ricorrenza, 10) || 1;
         let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id, 10) : null;
 
-        const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
-        let reparto = uRes.rows.length > 0 ? uRes.rows[0].reparto : null;
+        let repartoFinale = (reparto || '').trim();
+        if (!repartoFinale) {
+            const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
+            const compitiUtente = uRes.rows.length > 0 ? parseCompitiList(uRes.rows[0].reparto) : [];
+            repartoFinale = compitiUtente[0] || null;
+        }
 
         const [anno, mese, day] = giorno.split('-').map(Number);
         let dataCorrente = new Date(Date.UTC(anno, mese - 1, day));
@@ -436,7 +474,7 @@ app.post('/api/turni', async (req, res) => {
             
             await pool.query(
                 "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
-                [dataGiorno, orario, utente_id, reparto, idVeicoloSafe, stato, req.azienda_id]
+                [dataGiorno, orario, utente_id, repartoFinale, idVeicoloSafe, stato, req.azienda_id]
             );
             dataCorrente.setUTCDate(dataCorrente.getUTCDate() + 7);
         }
@@ -489,6 +527,114 @@ app.put('/api/turni/:id/stato', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- ENDPOINT SCAMBIO TURNO ---
+app.put('/api/turni/:id/richiedi-scambio', async (req, res) => {
+    try {
+        await pool.query(
+            "UPDATE turni SET stato = 'scambio', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2 AND stato = 'confermato'",
+            [req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/turni/:id/annulla-scambio', async (req, res) => {
+    try {
+        await pool.query(
+            "UPDATE turni SET stato = 'confermato', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
+    try {
+        const sostitutoId = parseInt(req.body.sostituto_id, 10);
+        if (!sostitutoId) {
+            return res.status(400).json({ success: false, message: "Utente non valido." });
+        }
+
+        const turnoRes = await pool.query(
+            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+        const turno = turnoRes.rows[0];
+
+        if (turno.stato !== 'scambio') {
+            return res.json({ success: false, message: "Questo turno non è più disponibile per lo scambio." });
+        }
+        if (Number(turno.utente_id) === sostitutoId) {
+            return res.json({ success: false, message: "Non puoi accettare il tuo stesso turno." });
+        }
+
+        const candidatoRes = await pool.query(
+            "SELECT id, reparto FROM utenti WHERE id = $1 AND azienda_id = $2",
+            [sostitutoId, req.azienda_id]
+        );
+        if (candidatoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Dipendente non trovato." });
+        }
+
+        const compitiCandidato = parseCompitiList(candidatoRes.rows[0].reparto).map(c => c.toLowerCase());
+        const repartoTurno = (turno.reparto || '').trim().toLowerCase();
+
+        if (!repartoTurno || !compitiCandidato.includes(repartoTurno)) {
+            return res.status(403).json({
+                success: false,
+                message: `Puoi accettare solo scambi del tuo stesso reparto/compito (${turno.reparto || 'non specificato'}).`
+            });
+        }
+
+        await pool.query(
+            "UPDATE turni SET stato = 'scambio_proposto', sostituto_id = $1 WHERE id = $2 AND azienda_id = $3",
+            [sostitutoId, req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/turni/:id/ritira-scambio', async (req, res) => {
+    try {
+        await pool.query(
+            "UPDATE turni SET stato = 'scambio', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
+            [req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/turni/:id/approva-scambio', async (req, res) => {
+    try {
+        const turnoRes = await pool.query(
+            "SELECT sostituto_id FROM turni WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0 || !turnoRes.rows[0].sostituto_id) {
+            return res.json({ success: false, message: "Nessun sostituto da approvare per questo turno." });
+        }
+
+        await pool.query(
+            "UPDATE turni SET utente_id = sostituto_id, sostituto_id = NULL, stato = 'confermato' WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/turni/:id/rifiuta-scambio', async (req, res) => {
+    try {
+        await pool.query(
+            "UPDATE turni SET stato = 'confermato', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // FUNZIONE CALCOLO ORE
 function calcolaOreTurno(orarioStr) {
     if (!orarioStr) return 0;
@@ -523,7 +669,7 @@ app.get('/api/statistiche/mensili', async (req, res) => {
             FROM utenti u
             LEFT JOIN turni t ON u.id = t.utente_id 
                 AND t.giorno LIKE $1
-                AND t.stato IN ('confermato', 'assegnato')
+                AND t.stato IN ('confermato', 'assegnato', 'scambio', 'scambio_proposto')
                 AND t.azienda_id = $2
             WHERE u.ruolo != 'manager' AND u.azienda_id = $2
         `;

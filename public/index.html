@@ -109,8 +109,11 @@
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     
-                    <select id="selettore-dipendente" onchange="controllaReparto()" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
+                    <select id="selettore-dipendente" onchange="aggiornaCompitiTurno()" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">-- Scegli dipendente --</option>
+                    </select>
+
+                    <select id="selettore-compito-turno" onchange="controllaReparto()" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-amber-500 bg-amber-50 border-amber-400 font-semibold text-amber-900">
                     </select>
                     
                     <select id="selettore-veicolo" class="hidden border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500 bg-yellow-50 border-yellow-400 font-medium">
@@ -143,7 +146,7 @@
                         <thead>
                             <tr class="border-b bg-gray-100 text-gray-600 text-sm">
                                 <th class="p-3">Dipendente</th>
-                                <th class="p-3">Reparto</th>
+                                <th class="p-3">Compiti / Reparti</th>
                                 <th class="p-3 text-center">Totale Turni nel Mese</th>
                                 <th class="p-3 text-right text-indigo-600">Ore Lavorate</th>
                             </tr>
@@ -153,7 +156,7 @@
                 </div>
             </div>
 
-            <!-- SCHEDA 3 & 4: PROFILO & REPARTI -->
+            <!-- SCHEDA 3 & 4: PROFILO & REPARTI/COMPITI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
@@ -164,7 +167,7 @@
                     </form>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
-                    <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
+                    <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti / Compiti</h3>
                     <form id="form-nuovo-reparto" class="flex flex-wrap sm:flex-nowrap gap-2 mb-4 items-center">
                         <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-1 min-w-0 w-full sm:w-auto outline-none focus:ring-2 focus:ring-amber-400" placeholder="es. Sala, Cucina, Rider">
                         <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -181,13 +184,18 @@
             <!-- SCHEDA 5 & 6: TEAM E VEICOLI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600 overflow-x-auto">
-                    <h3 class="text-xl font-bold mb-4">👥 Personale</h3>
-                    <form id="form-nuovo-utente" class="grid grid-cols-2 sm:flex gap-2 mb-4 sm:flex-wrap">
-                        <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 rounded-lg min-w-0 sm:flex-grow outline-none focus:ring-2 focus:ring-blue-400">
-                        <select id="nuovo-ruolo" class="border p-2 rounded-lg min-w-0 bg-white outline-none focus:ring-2 focus:ring-blue-400"><option value="staff">Staff</option><option value="manager">Manager</option></select>
-                        <select id="nuovo-reparto" class="border p-2 rounded-lg min-w-0 bg-white outline-none focus:ring-2 focus:ring-blue-400"><option value="">Reparto...</option></select>
-                        <input type="password" id="nuova-password" placeholder="Pass" required class="border p-2 rounded-lg min-w-0 sm:w-24 outline-none focus:ring-2 focus:ring-blue-400">
-                        <button type="submit" class="col-span-2 sm:col-span-1 bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg font-bold shadow-sm">+</button>
+                    <h3 class="text-xl font-bold mb-4">👥 Personale (Multi-Compito)</h3>
+                    <form id="form-nuovo-utente" class="space-y-2.5 mb-4">
+                        <div class="grid grid-cols-2 sm:flex gap-2">
+                            <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 rounded-lg min-w-0 sm:flex-grow outline-none focus:ring-2 focus:ring-blue-400">
+                            <select id="nuovo-ruolo" class="border p-2 rounded-lg min-w-0 bg-white outline-none focus:ring-2 focus:ring-blue-400"><option value="staff">Staff</option><option value="manager">Manager</option></select>
+                            <input type="password" id="nuova-password" placeholder="Password" required class="col-span-2 sm:col-span-1 border p-2 rounded-lg min-w-0 sm:w-28 outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                            <div class="text-xs font-bold text-gray-500 uppercase mb-1.5">Assegna uno o più compiti / reparti:</div>
+                            <div id="nuovo-reparto-checkboxes" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg font-bold shadow-sm">+ Aggiungi Dipendente</button>
                     </form>
                     <table class="w-full text-left text-sm"><tbody id="tabella-utenti"></tbody></table>
                 </div>
@@ -209,15 +217,16 @@
         <div id="sezione-staff" class="hidden space-y-6 mb-6">
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600">
                 <h3 class="text-xl font-bold mb-2 flex items-center gap-2">✋ Proponi Disponibilità</h3>
-                <form id="form-proponi-turno" class="flex flex-col md:flex-row gap-3">
+                <form id="form-proponi-turno" class="flex flex-col md:flex-row gap-3 flex-wrap">
                     <input type="date" id="giorno-proposta" required class="border p-2 rounded-lg w-full md:w-auto">
                     <input type="text" id="orario-proposta" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto">
+                    <select id="compito-proposta" class="hidden border p-2 rounded-lg w-full md:w-auto bg-amber-50 border-amber-300 font-semibold text-amber-900"></select>
                     <select id="settimane-ricorrenza-proposta" class="border p-2 rounded-lg text-green-900 bg-green-50">
                         <option value="1">Singolo Turno</option>
                         <option value="2">🔄 Ripeti per 2 sett.</option>
                         <option value="4">🔄 Ripeti per 1 mese</option>
                     </select>
-                    <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded-lg font-bold">Invia</button>
+                    <button type="submit" class="bg-green-500 hover:bg-green-600 transition text-white px-6 py-2 rounded-lg font-bold">Invia</button>
                 </form>
             </div>
 
@@ -226,7 +235,7 @@
                 <form id="form-indisponibilita" class="flex flex-col md:flex-row gap-3">
                     <input type="date" id="giorno-assenza" required class="border p-2 rounded-lg w-full md:w-auto">
                     <input type="text" id="motivo-assenza" placeholder="Motivo (es. Ferie)" required class="border p-2 rounded-lg w-full md:w-auto">
-                    <button type="submit" class="bg-red-500 text-white px-6 py-2 rounded-lg font-bold">Registra</button>
+                    <button type="submit" class="bg-red-500 hover:bg-red-600 transition text-white px-6 py-2 rounded-lg font-bold">Registra</button>
                 </form>
             </div>
         </div>
@@ -258,6 +267,19 @@
         </div>
     </div>
 
+    <!-- MODALE MODIFICA COMPITI DIPENDENTE -->
+    <div id="modal-compiti" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border-t-4 border-blue-600">
+            <h3 class="text-lg font-bold text-gray-900 mb-1">✏️ Compiti / Reparti Assegnati</h3>
+            <p id="modal-compiti-nome" class="text-sm text-gray-500 mb-4"></p>
+            <div id="modal-compiti-lista" class="flex flex-wrap gap-2 mb-5"></div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="chiudiModalCompiti()" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 font-bold text-sm">Annulla</button>
+                <button type="button" onclick="salvaModalCompiti()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">Salva Compiti</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPT JAVASCRIPT -->
     <script>
         let utenteLoggato = null; 
@@ -270,11 +292,28 @@
         let listaRepartiGlobal = [];
         let turniGlobal = [];
         let vistaAttuale = 'lista';
+        let utenteInModificaCompitiId = null;
 
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
         document.getElementById('mese-calendario').value = meseCorrenteStr;
+
+        function parseCompiti(repartoStr) {
+            if (!repartoStr) return [];
+            return String(repartoStr)
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        }
+
+        function utenteHaReparto(utente, repartoTurno) {
+            if (!utente || !repartoTurno) return false;
+            const target = String(repartoTurno).trim().toLowerCase();
+            if (!target) return false;
+            const mieiCompiti = parseCompiti(utente.reparto).map(c => c.toLowerCase());
+            return mieiCompiti.includes(target);
+        }
 
         async function apiFetch(url, options = {}) {
             if (!options.headers) options.headers = {};
@@ -407,11 +446,25 @@
             } else {
                 document.getElementById('sezione-manager').classList.add('hidden');
                 document.getElementById('sezione-staff').classList.remove('hidden');
+                aggiornaCompitiPropostaStaff();
             }
             
             Promise.all([caricaReparti(), caricaVeicoli()])
                 .then(() => caricaUtenti())
                 .then(() => caricaTurni());
+        }
+
+        function aggiornaCompitiPropostaStaff() {
+            const selCompitoProp = document.getElementById('compito-proposta');
+            if (!selCompitoProp || !utenteLoggato) return;
+            const compiti = parseCompiti(utenteLoggato.reparto);
+            if (compiti.length > 1) {
+                selCompitoProp.innerHTML = compiti.map(c => `<option value="${c}">Compito: ${c}</option>`).join('');
+                selCompitoProp.classList.remove('hidden');
+            } else {
+                selCompitoProp.innerHTML = compiti.length === 1 ? `<option value="${compiti[0]}">${compiti[0]}</option>` : '';
+                selCompitoProp.classList.add('hidden');
+            }
         }
 
         window.tornaSuperAdmin = function() {
@@ -552,17 +605,25 @@
         function caricaReparti() {
             return apiFetch('/api/reparti').then(res => res.json()).then(reparti => {
                 listaRepartiGlobal = reparti;
-                const selectReparto = document.getElementById('nuovo-reparto');
+                const containerCheckboxes = document.getElementById('nuovo-reparto-checkboxes');
                 const filtroReparto = document.getElementById('filtro-reparto');
                 const tabellaReparti = document.getElementById('tabella-reparti');
                 
-                selectReparto.innerHTML = '<option value="">-- Seleziona Reparto --</option>';
+                containerCheckboxes.innerHTML = '';
                 filtroReparto.innerHTML = '<option value="Tutti">🔍 Tutti i Reparti</option>';
                 tabellaReparti.innerHTML = '';
 
+                if (reparti.length === 0) {
+                    containerCheckboxes.innerHTML = '<span class="text-xs text-gray-400 italic">Crea prima almeno un reparto/compito nella scheda sopra.</span>';
+                }
+
                 reparti.forEach(r => {
                     const usaMezzo = Boolean(r.richiede_veicolo && r.richiede_veicolo !== 'false' && r.richiede_veicolo !== '0');
-                    selectReparto.innerHTML += `<option value="${r.nome}">${r.nome}</option>`;
+                    containerCheckboxes.innerHTML += `
+                        <label class="inline-flex items-center gap-1.5 bg-white border border-gray-300 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer hover:bg-blue-50 select-none">
+                            <input type="checkbox" name="nuovo-reparto-item" value="${r.nome}" class="rounded text-blue-600">
+                            <span>${r.nome}${usaMezzo ? ' 🚗' : ''}</span>
+                        </label>`;
                     filtroReparto.innerHTML += `<option value="${r.nome}">Reparto: ${r.nome}</option>`;
                     tabellaReparti.innerHTML += `
                         <tr class="border-b">
@@ -606,20 +667,39 @@
 
                 utenti.forEach(utente => {
                     loginSelect.innerHTML += `<option value="${utente.id}">${utente.nome}</option>`;
+                    const compiti = parseCompiti(utente.reparto);
+                    const compitiLabel = compiti.length > 0 ? compiti.join(', ') : 'Nessun compito';
+
                     if(utente.ruolo !== 'manager') {
-                        const repUtente = (utente.reparto || '').trim().toLowerCase();
-                        const rInfo = listaRepartiGlobal.find(r => (r.nome || '').trim().toLowerCase() === repUtente);
-                        const usaMezzo = rInfo && Boolean(rInfo.richiede_veicolo && rInfo.richiede_veicolo !== 'false' && rInfo.richiede_veicolo !== '0');
-                        const v = usaMezzo ? "1" : "0";
-                        selettoreDipendente.innerHTML += `<option value="${utente.id}" data-reparto="${utente.reparto || ''}" data-richiede-veicolo="${v}">${utente.nome} (${utente.reparto || 'Nessun reparto'})</option>`;
+                        selettoreDipendente.innerHTML += `<option value="${utente.id}" data-reparto="${utente.reparto || ''}">${utente.nome} (${compitiLabel})</option>`;
                     }
-                    tabellaUtenti.innerHTML += `<tr class="border-b"><td class="p-2">${utente.nome} (${utente.ruolo})</td><td class="p-2 text-right">
-                    ${utente.id !== utenteLoggato?.id ? `<button onclick="eliminaUtente(${utente.id})" class="text-red-500">🗑️</button>` : 'Tu'}</td></tr>`;
+
+                    const badgesHtml = compiti.map(c => `<span class="inline-block bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-semibold px-2 py-0.5 rounded-full mr-1 mb-0.5">${c}</span>`).join('');
+
+                    tabellaUtenti.innerHTML += `
+                        <tr class="border-b">
+                            <td class="p-2">
+                                <div class="font-semibold">${utente.nome} <span class="text-xs font-normal text-gray-500">(${utente.ruolo})</span></div>
+                                ${utente.ruolo !== 'manager' ? `<div class="mt-1">${badgesHtml || '<span class="text-xs text-gray-400">Nessun compito</span>'}</div>` : ''}
+                            </td>
+                            <td class="p-2 text-right whitespace-nowrap">
+                                ${utente.ruolo !== 'manager' ? `<button type="button" onclick="apriModalCompiti(${utente.id})" class="bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-lg mr-1" title="Modifica compiti/reparti">✏️ Compiti</button>` : ''}
+                                ${utente.id !== utenteLoggato?.id ? `<button type="button" onclick="eliminaUtente(${utente.id})" class="text-red-500">🗑️</button>` : '<span class="text-xs text-gray-400 font-semibold">Tu</span>'}
+                            </td>
+                        </tr>`;
                 });
 
                 if (dipendenteSelezionatoPrima) {
                     selettoreDipendente.value = dipendenteSelezionatoPrima;
-                    controllaReparto();
+                    aggiornaCompitiTurno();
+                }
+
+                if (utenteLoggato && utenteLoggato.ruolo !== 'manager' && utenteLoggato.ruolo !== 'superadmin') {
+                    const updatedMe = utenti.find(u => u.id === utenteLoggato.id);
+                    if (updatedMe) {
+                        utenteLoggato.reparto = updatedMe.reparto;
+                        aggiornaCompitiPropostaStaff();
+                    }
                 }
 
                 if (utenteLoggato?.ruolo === 'manager') {
@@ -627,6 +707,54 @@
                 }
             });
         }
+
+        // --- MODALE MODIFICA COMPITI UTENTE ---
+        window.apriModalCompiti = function(utenteId) {
+            const utente = listaUtentiGlobal.find(u => u.id === utenteId);
+            if (!utente) return;
+            utenteInModificaCompitiId = utenteId;
+            document.getElementById('modal-compiti-nome').textContent = `Seleziona i compiti / reparti abilitati per ${utente.nome}:`;
+            const compitiAttuali = parseCompiti(utente.reparto).map(c => c.toLowerCase());
+            const container = document.getElementById('modal-compiti-lista');
+            container.innerHTML = '';
+
+            if (listaRepartiGlobal.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500">Nessun reparto configurato.</p>';
+            } else {
+                listaRepartiGlobal.forEach(r => {
+                    const checked = compitiAttuali.includes((r.nome || '').trim().toLowerCase()) ? 'checked' : '';
+                    container.innerHTML += `
+                        <label class="inline-flex items-center gap-2 bg-gray-50 border border-gray-300 px-3 py-2 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-50 select-none">
+                            <input type="checkbox" name="modal-compito-item" value="${r.nome}" ${checked} class="rounded text-blue-600">
+                            <span>${r.nome}${r.richiede_veicolo ? ' 🚗' : ''}</span>
+                        </label>`;
+                });
+            }
+            document.getElementById('modal-compiti').classList.remove('hidden');
+        };
+
+        window.chiudiModalCompiti = function() {
+            utenteInModificaCompitiId = null;
+            document.getElementById('modal-compiti').classList.add('hidden');
+        };
+
+        window.salvaModalCompiti = function() {
+            if (!utenteInModificaCompitiId) return;
+            const selezionati = Array.from(document.querySelectorAll('input[name="modal-compito-item"]:checked')).map(cb => cb.value);
+            if (selezionati.length === 0) {
+                return alert("Seleziona almeno un compito/reparto per il dipendente.");
+            }
+            apiFetch(`/api/utenti/${utenteInModificaCompitiId}/reparti`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reparti: selezionati })
+            })
+            .then(res => res.json())
+            .then(() => {
+                chiudiModalCompiti();
+                caricaUtenti();
+            });
+        };
 
         function caricaVeicoli() {
             return apiFetch('/api/veicoli').then(res => res.json()).then(veicoli => {
@@ -676,19 +804,59 @@
         // --- SALVATAGGIO DATI ---
         document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
         document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
-        document.getElementById('form-nuovo-utente').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/utenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-nome').value, ruolo: document.getElementById('nuovo-ruolo').value, reparto: document.getElementById('nuovo-reparto').value, password: document.getElementById('nuova-password').value }) }).then(() => { caricaUtenti(); e.target.reset(); }); });
+        
+        document.getElementById('form-nuovo-utente').addEventListener('submit', e => { 
+            e.preventDefault(); 
+            const ruolo = document.getElementById('nuovo-ruolo').value;
+            const repartiSelezionati = Array.from(document.querySelectorAll('input[name="nuovo-reparto-item"]:checked')).map(cb => cb.value);
+            if (ruolo !== 'manager' && repartiSelezionati.length === 0) {
+                return alert("Seleziona almeno un compito/reparto per il dipendente!");
+            }
+            apiFetch('/api/utenti', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    nome: document.getElementById('nuovo-nome').value, 
+                    ruolo, 
+                    reparti: ruolo === 'manager' ? ['Tutti'] : repartiSelezionati, 
+                    password: document.getElementById('nuova-password').value 
+                }) 
+            }).then(() => { 
+                caricaUtenti(); 
+                e.target.reset(); 
+            }); 
+        });
+
         document.getElementById('form-nuovo-veicolo').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/veicoli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-veicolo-nome').value, tipo: document.getElementById('nuovo-veicolo-tipo').value }) }).then(() => { caricaVeicoli(); e.target.reset(); }); });
         
+        window.aggiornaCompitiTurno = () => {
+            const s = document.getElementById('selettore-dipendente');
+            const selCompito = document.getElementById('selettore-compito-turno');
+            if (s.selectedIndex > 0) {
+                const opt = s.options[s.selectedIndex];
+                const compiti = parseCompiti(opt.dataset.reparto);
+                selCompito.innerHTML = compiti.map(c => `<option value="${c}">Compito: ${c}</option>`).join('');
+                selCompito.classList.toggle('hidden', compiti.length <= 1);
+            } else {
+                selCompito.innerHTML = '';
+                selCompito.classList.add('hidden');
+            }
+            controllaReparto();
+        };
+
         window.controllaReparto = () => { 
             const s = document.getElementById('selettore-dipendente'); 
+            const selCompito = document.getElementById('selettore-compito-turno');
             const v = document.getElementById('selettore-veicolo'); 
             if (s.selectedIndex > 0) { 
                 const opt = s.options[s.selectedIndex];
-                const repNome = (opt.dataset.reparto || '').trim().toLowerCase();
+                const compiti = parseCompiti(opt.dataset.reparto);
+                const compitoScelto = selCompito.value || compiti[0] || '';
+                const repNome = compitoScelto.trim().toLowerCase();
                 const rInfo = listaRepartiGlobal.find(r => (r.nome || '').trim().toLowerCase() === repNome);
                 const richiede = rInfo
                     ? Boolean(rInfo.richiede_veicolo && rInfo.richiede_veicolo !== 'false' && rInfo.richiede_veicolo !== '0')
-                    : (opt.dataset.richiedeVeicolo === "1");
+                    : false;
                 v.classList.toggle('hidden', !richiede);
                 if (!richiede) v.value = "";
             } else {
@@ -699,12 +867,51 @@
 
         document.getElementById('form-turno').addEventListener('submit', e => { 
             e.preventDefault(); 
-            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: document.getElementById('giorno').value, orario: document.getElementById('orario').value, utente_id: document.getElementById('selettore-dipendente').value, veicolo_id: document.getElementById('selettore-veicolo').value, ricorrenza: document.getElementById('settimane-ricorrenza').value, stato: 'confermato' }) }).then(() => { caricaTurni(); e.target.reset(); controllaReparto(); }); 
+            const s = document.getElementById('selettore-dipendente');
+            const opt = s.options[s.selectedIndex];
+            const compiti = opt ? parseCompiti(opt.dataset.reparto) : [];
+            const compitoScelto = document.getElementById('selettore-compito-turno').value || compiti[0] || '';
+
+            apiFetch('/api/turni', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    giorno: document.getElementById('giorno').value, 
+                    orario: document.getElementById('orario').value, 
+                    utente_id: s.value, 
+                    reparto: compitoScelto,
+                    veicolo_id: document.getElementById('selettore-veicolo').value, 
+                    ricorrenza: document.getElementById('settimane-ricorrenza').value, 
+                    stato: 'confermato' 
+                }) 
+            }).then(() => { 
+                caricaTurni(); 
+                e.target.reset(); 
+                aggiornaCompitiTurno(); 
+            }); 
         });
 
         document.getElementById('form-proponi-turno').addEventListener('submit', e => { 
             e.preventDefault(); 
-            apiFetch('/api/turni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: document.getElementById('giorno-proposta').value, orario: document.getElementById('orario-proposta').value, utente_id: utenteLoggato.id, ricorrenza: document.getElementById('settimane-ricorrenza-proposta').value, stato: 'proposta' }) }).then(() => { caricaTurni(); alert("Proposta inviata!"); e.target.reset(); }); 
+            const compiti = parseCompiti(utenteLoggato.reparto);
+            const compitoScelto = document.getElementById('compito-proposta').value || compiti[0] || '';
+            apiFetch('/api/turni', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    giorno: document.getElementById('giorno-proposta').value, 
+                    orario: document.getElementById('orario-proposta').value, 
+                    utente_id: utenteLoggato.id, 
+                    reparto: compitoScelto,
+                    ricorrenza: document.getElementById('settimane-ricorrenza-proposta').value, 
+                    stato: 'proposta' 
+                }) 
+            }).then(() => { 
+                caricaTurni(); 
+                alert("Proposta inviata!"); 
+                e.target.reset(); 
+                aggiornaCompitiPropostaStaff();
+            }); 
         });
 
         document.getElementById('form-indisponibilita').addEventListener('submit', e => { 
@@ -774,6 +981,10 @@
             turniFiltrati.forEach(turno => {
                 const div = document.createElement('div');
                 let html = '';
+                const isProprietario = Number(turno.utente_id) === Number(utenteLoggato.id);
+                const isSostituto = Number(turno.sostituto_id) === Number(utenteLoggato.id);
+                const isManager = utenteLoggato.ruolo === 'manager';
+                const puoAccettareScambio = !isManager && !isProprietario && utenteHaReparto(utenteLoggato, turno.reparto);
                 
                 if (turno.stato === 'indisponibile') {
                     div.className = `p-4 rounded-lg border-l-4 border-red-500 bg-red-50 flex flex-col md:flex-row justify-between shadow-sm`;
@@ -781,35 +992,85 @@
                             <div class="text-gray-800">👤 <strong>${turno.nome_proprietario || 'Dipendente'}</strong></div>
                             <div class="text-sm text-gray-600">Motivo: <em>${turno.orario}</em></div></div>`;
                     
-                    if (utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) {
+                    if (isManager || isProprietario) {
                         html += `<div class="mt-2 md:mt-0 flex gap-2"><button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Annulla</button></div>`;
                     }
                 } else if (turno.stato === 'proposta') {
                     div.className = `p-4 rounded-lg border-l-4 border-yellow-500 bg-yellow-50 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center`;
                     html = `<div><div class="text-lg font-bold text-yellow-700">✋ Proposta: ${turno.giorno} | ${turno.orario}</div>
-                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'}</div></div>`;
+                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} ${turno.reparto ? `- Compito: <strong>${turno.reparto}</strong>` : ''}</div></div>`;
                     
-                    if (utenteLoggato.ruolo === 'manager') {
+                    if (isManager) {
                         html += `<div class="mt-2 md:mt-0 flex gap-2"><button class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="confermaTurno(${turno.id})">✅ Conferma</button>
                         <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Rifiuta</button></div>`;
-                    } else if (turno.utente_id === utenteLoggato.id) {
+                    } else if (isProprietario) {
                         html += `<div class="mt-2 md:mt-0"><button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Ritira Proposta</button></div>`;
                     }
+                } else if (turno.stato === 'scambio') {
+                    div.className = `p-4 rounded-lg border-l-4 border-purple-500 bg-purple-50 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3`;
+                    html = `<div>
+                        <div class="text-xs font-bold uppercase tracking-wide text-purple-700 mb-0.5">🔄 Richiesta Scambio Turno (Reparto: ${turno.reparto || '-'})</div>
+                        <div class="text-lg font-bold text-gray-900">${turno.giorno} | ${turno.orario}</div>
+                        <div class="text-gray-700">👤 Titolare attuale: <strong>${turno.nome_proprietario || 'Dipendente'}</strong></div>
+                        ${turno.nome_veicolo ? `<div class="text-sm text-gray-500">🚗 Mezzo: ${turno.nome_veicolo}</div>` : ''}
+                    </div>
+                    <div class="flex flex-wrap gap-2">`;
+
+                    if (puoAccettareScambio) {
+                        html += `<button class="bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-1.5 rounded font-bold text-sm shadow-sm" onclick="accettaScambio(${turno.id})">✋ Accetta Scambio</button>`;
+                    } else if (!isManager && !isProprietario) {
+                        html += `<span class="text-xs font-semibold text-gray-500 bg-white border px-2.5 py-1.5 rounded">Solo reparto: ${turno.reparto || '-'}</span>`;
+                    }
+
+                    if (isProprietario || isManager) {
+                        html += `<button class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
+                    }
+                    if (isManager) {
+                        html += `<button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
+                    }
+                    html += `</div>`;
+                } else if (turno.stato === 'scambio_proposto') {
+                    div.className = `p-4 rounded-lg border-l-4 border-amber-500 bg-amber-50 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3`;
+                    html = `<div>
+                        <div class="text-xs font-bold uppercase tracking-wide text-amber-800 mb-0.5">🤝 Scambio Accettato — In Attesa Conferma Titolare</div>
+                        <div class="text-lg font-bold text-gray-900">${turno.giorno} | ${turno.orario}</div>
+                        <div class="text-gray-800">👤 <strong>${turno.nome_proprietario || 'Dipendente'}</strong> ➔ <strong>${turno.nome_sostituto || 'Collega'}</strong> (Reparto: <strong>${turno.reparto || '-'}</strong>)</div>
+                        ${turno.nome_veicolo ? `<div class="text-sm text-gray-500">🚗 Mezzo: ${turno.nome_veicolo}</div>` : ''}
+                    </div>
+                    <div class="flex flex-wrap gap-2">`;
+
+                    if (isManager) {
+                        html += `
+                            <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="approvaScambio(${turno.id})">✅ Approva Scambio</button>
+                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="rifiutaScambio(${turno.id})">❌ Rifiuta</button>`;
+                    } else {
+                        if (isSostituto) {
+                            html += `<button class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="ritiraScambio(${turno.id})">↩️ Ritira Disponibilità</button>`;
+                        }
+                        if (isProprietario) {
+                            html += `<button class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
+                        }
+                    }
+                    html += `</div>`;
                 } else {
-                    div.className = `p-4 rounded-lg border-l-4 border-blue-500 bg-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center`;
+                    div.className = `p-4 rounded-lg border-l-4 border-blue-500 bg-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3`;
                     const orarioSafe = (turno.orario || '').replace(/'/g, "\\'");
                     html = `<div>
                         <div class="text-lg font-bold">${turno.giorno} | <span id="orario-text-${turno.id}">${turno.orario}</span></div>
-                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} - Reparto: <strong>${turno.reparto || '-'}</strong></div>
+                        <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} - Compito: <strong>${turno.reparto || '-'}</strong></div>
                         ${turno.nome_veicolo ? `<div class="text-sm text-gray-500">🚗 Mezzo: ${turno.nome_veicolo}</div>` : ''}
-                    </div>`;
+                    </div>
+                    <div class="flex flex-wrap gap-2">`;
                     
-                    if (utenteLoggato.ruolo === 'manager') {
-                        html += `<div class="mt-2 md:mt-0 flex flex-wrap gap-2">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${orarioSafe}')">✏️ Modifica Orario</button>
-                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>
-                        </div>`;
+                    if (isProprietario) {
+                        html += `<button class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="richiediScambio(${turno.id})">🔄 Proponi Scambio</button>`;
                     }
+                    if (isManager) {
+                        html += `
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${orarioSafe}')">✏️ Modifica Orario</button>
+                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
+                    }
+                    html += `</div>`;
                 }
                 
                 div.innerHTML = html;
@@ -863,12 +1124,17 @@
 
                 eventi.forEach(turno => {
                     const orarioSafe = (turno.orario || '').replace(/'/g, "\\'");
+                    const isProprietario = Number(turno.utente_id) === Number(utenteLoggato.id);
+                    const isSostituto = Number(turno.sostituto_id) === Number(utenteLoggato.id);
+                    const isManager = utenteLoggato.ruolo === 'manager';
+                    const puoAccettareScambio = !isManager && !isProprietario && utenteHaReparto(utenteLoggato, turno.reparto);
+
                     if (turno.stato === 'indisponibile') {
                         html += `
                             <div class="p-1.5 rounded border-l-4 border-red-500 bg-red-50 text-red-900 text-xs leading-tight">
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold">🚫 ${turno.nome_proprietario || 'Dipendente'}</span>
-                                    ${(utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Annulla assenza">✕</button>` : ''}
+                                    ${(isManager || isProprietario) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Annulla assenza">✕</button>` : ''}
                                 </div>
                                 <div class="text-[11px] text-red-700 italic truncate" title="${turno.orario}">${turno.orario}</div>
                             </div>`;
@@ -878,22 +1144,47 @@
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold">✋ ${turno.nome_proprietario || 'Dipendente'}</span>
                                     <div class="flex gap-1 shrink-0">
-                                        ${utenteLoggato.ruolo === 'manager' ? `<button onclick="confermaTurno(${turno.id})" class="text-green-600 hover:text-green-800 font-bold" title="Conferma">✓</button>` : ''}
-                                        ${(utenteLoggato.ruolo === 'manager' || turno.utente_id === utenteLoggato.id) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Elimina">✕</button>` : ''}
+                                        ${isManager ? `<button onclick="confermaTurno(${turno.id})" class="text-green-600 hover:text-green-800 font-bold" title="Conferma">✓</button>` : ''}
+                                        ${(isManager || isProprietario) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Elimina">✕</button>` : ''}
                                     </div>
                                 </div>
                                 <div class="text-[11px] font-semibold text-yellow-800">${turno.orario}</div>
+                            </div>`;
+                    } else if (turno.stato === 'scambio') {
+                        html += `
+                            <div class="p-1.5 rounded border-l-4 border-purple-500 bg-purple-50 text-purple-950 text-xs leading-tight">
+                                <div class="flex justify-between items-start gap-1">
+                                    <span class="font-bold truncate">🔄 ${turno.nome_proprietario || 'Dipendente'}</span>
+                                    ${(isProprietario || isManager) ? `<button onclick="annullaScambio(${turno.id})" class="text-gray-600 hover:text-gray-900 font-bold" title="Annulla scambio">✕</button>` : ''}
+                                </div>
+                                <div class="text-[11px] font-semibold text-purple-800">${turno.orario}</div>
+                                <div class="text-[10px] text-purple-700 truncate">${turno.reparto || '-'}</div>
+                                ${puoAccettareScambio ? `<button onclick="accettaScambio(${turno.id})" class="mt-1 w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-0.5 px-1.5 rounded">✋ Accetta</button>` : ''}
+                            </div>`;
+                    } else if (turno.stato === 'scambio_proposto') {
+                        html += `
+                            <div class="p-1.5 rounded border-l-4 border-amber-500 bg-amber-50 text-amber-950 text-xs leading-tight">
+                                <div class="font-bold truncate">🤝 ${turno.nome_proprietario} ➔ ${turno.nome_sostituto}</div>
+                                <div class="text-[11px] font-semibold text-amber-800">${turno.orario}</div>
+                                <div class="text-[10px] text-gray-600 truncate">${turno.reparto || '-'}</div>
+                                ${isManager ? `
+                                    <div class="mt-1 flex gap-1">
+                                        <button onclick="approvaScambio(${turno.id})" class="flex-1 bg-green-600 text-white text-[10px] font-bold py-0.5 rounded" title="Approva scambio">✓ Sì</button>
+                                        <button onclick="rifiutaScambio(${turno.id})" class="flex-1 bg-red-500 text-white text-[10px] font-bold py-0.5 rounded" title="Rifiuta scambio">✕ No</button>
+                                    </div>` : ''}
+                                ${isSostituto ? `<button onclick="ritiraScambio(${turno.id})" class="mt-1 w-full bg-amber-600 text-white text-[10px] font-bold py-0.5 rounded">↩️ Ritira</button>` : ''}
                             </div>`;
                     } else {
                         html += `
                             <div class="p-1.5 rounded border-l-4 border-blue-500 bg-blue-50 text-blue-950 text-xs leading-tight">
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold truncate">${turno.nome_proprietario || 'Dipendente'}</span>
-                                    ${utenteLoggato.ruolo === 'manager' ? `
-                                        <div class="flex gap-1 shrink-0">
+                                    <div class="flex gap-1 shrink-0">
+                                        ${isProprietario ? `<button onclick="richiediScambio(${turno.id})" class="text-purple-600 hover:text-purple-800" title="Proponi scambio">🔄</button>` : ''}
+                                        ${isManager ? `
                                             <button onclick="modificaOrario(${turno.id}, '${orarioSafe}')" class="text-blue-600 hover:text-blue-800" title="Modifica orario">✏️</button>
-                                            <button onclick="eliminaTurno(${turno.id})" class="text-red-500 hover:text-red-700 font-bold" title="Elimina turno">✕</button>
-                                        </div>` : ''}
+                                            <button onclick="eliminaTurno(${turno.id})" class="text-red-500 hover:text-red-700 font-bold" title="Elimina turno">✕</button>` : ''}
+                                    </div>
                                 </div>
                                 <div class="text-[11px] font-semibold text-blue-800">${turno.orario}</div>
                                 <div class="text-[10px] text-gray-600 truncate">${turno.reparto || '-'}${turno.nome_veicolo ? ` • 🚗 ${turno.nome_veicolo}` : ''}</div>
@@ -916,7 +1207,54 @@
             container.innerHTML = html;
         }
 
-        // --- AZIONI SUI TURNI ---
+        // --- AZIONI SUI TURNI & SCAMBI ---
+        window.richiediScambio = function(id) {
+            if (confirm("Vuoi mettere questo turno disponibile per lo scambio con i colleghi del tuo stesso reparto?")) {
+                apiFetch(`/api/turni/${id}/richiedi-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+            }
+        };
+
+        window.annullaScambio = function(id) {
+            if (confirm("Vuoi annullare la richiesta di scambio e mantenere il turno?")) {
+                apiFetch(`/api/turni/${id}/annulla-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+            }
+        };
+
+        window.accettaScambio = function(id) {
+            if (confirm("Vuoi proporti per sostituire il collega in questo turno? Il Titolare riceverà la richiesta di conferma.")) {
+                apiFetch(`/api/turni/${id}/accetta-scambio`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sostituto_id: utenteLoggato.id })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success === false) {
+                        alert(data.message || "Impossibile accettare lo scambio.");
+                    }
+                    caricaTurni();
+                });
+            }
+        };
+
+        window.ritiraScambio = function(id) {
+            if (confirm("Vuoi ritirare la tua disponibilità per questo scambio?")) {
+                apiFetch(`/api/turni/${id}/ritira-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+            }
+        };
+
+        window.approvaScambio = function(id) {
+            if (confirm("Confermare definitivamente lo scambio di turno tra i due dipendenti?")) {
+                apiFetch(`/api/turni/${id}/approva-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+            }
+        };
+
+        window.rifiutaScambio = function(id) {
+            if (confirm("Rifiutare lo scambio e lasciare il turno al titolare originale?")) {
+                apiFetch(`/api/turni/${id}/rifiuta-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+            }
+        };
+
         window.modificaOrario = function(id, orarioAttuale) {
             const nuovoOrario = prompt("Inserisci il nuovo orario (es. 19:00 - 23:30):", orarioAttuale);
             if(nuovoOrario && nuovoOrario.trim() !== "" && nuovoOrario !== orarioAttuale) {
