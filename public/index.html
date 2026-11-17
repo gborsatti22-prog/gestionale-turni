@@ -165,12 +165,14 @@
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
                     <h3 class="text-xl font-bold mb-4">🏷️ Gestione Reparti</h3>
-                    <form id="form-nuovo-reparto" class="flex gap-2 mb-4 items-center">
-                        <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-grow outline-none" placeholder="es. Sala, Cucina, Rider">
-                        <label class="flex items-center gap-1 text-xs font-bold cursor-pointer bg-yellow-50 border border-yellow-300 px-2.5 py-2 rounded-lg select-none" title="Se spuntato, i turni di questo reparto permettono di scegliere un veicolo">
-                            <input type="checkbox" id="nuovo-reparto-veicolo"> 🚗 Mezzo
-                        </label>
-                        <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold">+</button>
+                    <form id="form-nuovo-reparto" class="flex flex-wrap sm:flex-nowrap gap-2 mb-4 items-center">
+                        <input type="text" id="nuovo-reparto-nome" required class="border p-2 rounded-lg flex-1 min-w-0 w-full sm:w-auto outline-none focus:ring-2 focus:ring-amber-400" placeholder="es. Sala, Cucina, Rider">
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <label class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer bg-yellow-50 border border-yellow-300 px-3 py-2 rounded-lg select-none whitespace-nowrap" title="Se spuntato, i turni di questo reparto permettono di scegliere un veicolo">
+                                <input type="checkbox" id="nuovo-reparto-veicolo" class="rounded text-amber-500"> 🚗 Mezzo
+                            </label>
+                            <button type="submit" class="bg-amber-500 hover:bg-amber-600 transition text-white px-5 py-2 rounded-lg font-bold shadow-sm shrink-0">+</button>
+                        </div>
                     </form>
                     <table class="w-full text-left text-sm"><tbody id="tabella-reparti"></tbody></table>
                 </div>
@@ -180,21 +182,23 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600 overflow-x-auto">
                     <h3 class="text-xl font-bold mb-4">👥 Personale</h3>
-                    <form id="form-nuovo-utente" class="flex gap-2 mb-4 flex-wrap">
-                        <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 w-20 flex-grow rounded">
-                        <select id="nuovo-ruolo" class="border p-2 rounded"><option value="staff">Staff</option><option value="manager">Manager</option></select>
-                        <select id="nuovo-reparto" class="border p-2 rounded"><option value="">Reparto...</option></select>
-                        <input type="password" id="nuova-password" placeholder="Pass" required class="border p-2 w-24 rounded">
-                        <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded font-bold">+</button>
+                    <form id="form-nuovo-utente" class="grid grid-cols-2 sm:flex gap-2 mb-4 sm:flex-wrap">
+                        <input type="text" id="nuovo-nome" placeholder="Nome" required class="border p-2 rounded-lg min-w-0 sm:flex-grow outline-none focus:ring-2 focus:ring-blue-400">
+                        <select id="nuovo-ruolo" class="border p-2 rounded-lg min-w-0 bg-white outline-none focus:ring-2 focus:ring-blue-400"><option value="staff">Staff</option><option value="manager">Manager</option></select>
+                        <select id="nuovo-reparto" class="border p-2 rounded-lg min-w-0 bg-white outline-none focus:ring-2 focus:ring-blue-400"><option value="">Reparto...</option></select>
+                        <input type="password" id="nuova-password" placeholder="Pass" required class="border p-2 rounded-lg min-w-0 sm:w-24 outline-none focus:ring-2 focus:ring-blue-400">
+                        <button type="submit" class="col-span-2 sm:col-span-1 bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg font-bold shadow-sm">+</button>
                     </form>
                     <table class="w-full text-left text-sm"><tbody id="tabella-utenti"></tbody></table>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-600 overflow-x-auto">
                     <h3 class="text-xl font-bold mb-4">🛵 Risorse</h3>
-                    <form id="form-nuovo-veicolo" class="flex gap-2 mb-4 flex-wrap">
-                        <input type="text" id="nuovo-veicolo-nome" placeholder="Nome" required class="border p-2 flex-grow rounded">
-                        <select id="nuovo-veicolo-tipo" class="border p-2 rounded"><option value="Moto">Moto</option><option value="Auto">Auto</option></select>
-                        <button type="submit" class="bg-purple-600 text-white px-4 py-1 rounded font-bold">+</button>
+                    <form id="form-nuovo-veicolo" class="flex flex-wrap sm:flex-nowrap gap-2 mb-4">
+                        <input type="text" id="nuovo-veicolo-nome" placeholder="Nome" required class="border p-2 rounded-lg flex-1 min-w-0 w-full sm:w-auto outline-none focus:ring-2 focus:ring-purple-400">
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <select id="nuovo-veicolo-tipo" class="border p-2 rounded-lg flex-1 sm:flex-initial bg-white outline-none focus:ring-2 focus:ring-purple-400"><option value="Moto">Moto</option><option value="Auto">Auto</option></select>
+                            <button type="submit" class="bg-purple-600 hover:bg-purple-700 transition text-white px-5 py-2 rounded-lg font-bold shadow-sm shrink-0">+</button>
+                        </div>
                     </form>
                     <table class="w-full text-left text-sm"><tbody id="tabella-veicoli"></tbody></table>
                 </div>
