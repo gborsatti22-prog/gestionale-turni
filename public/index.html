@@ -48,7 +48,7 @@
                 <button type="button" id="btn-test-push" onclick="inviaNotificaTest()" class="hidden bg-gray-700 hover:bg-gray-600 transition text-white px-2.5 py-2 rounded-lg font-bold text-xs shadow-sm" title="Invia una notifica di prova su questo dispositivo">📨 Test</button>
             </div>
             <button id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
-            <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
+<button type="button" onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
         </div>
     </div>
     
@@ -718,23 +718,18 @@
             mostraPannelloSuperAdmin();
         };
         
-        window.eseguiLogout = async function() {
+          window.eseguiLogout = function() {
             try {
-                if ('serviceWorker' in navigator && 'PushManager' in window) {
-                    const reg = await navigator.serviceWorker.ready;
-                    const sub = await reg.pushManager.getSubscription();
-                    if (sub) {
-                        await apiFetch('/api/push/unsubscribe', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: sub.endpoint })
-                        });
-                    }
-                }
+                localStorage.clear();
+                sessionStorage.clear();
             } catch (e) {}
-            pulisciSessioneLocale();
-            location.reload();
+            document.getElementById('sezione-superadmin').classList.add('hidden');
+            document.getElementById('sezione-manager').classList.add('hidden');
+            document.getElementById('sezione-staff').classList.add('hidden');
+            document.getElementById('bacheca-turni').classList.add('hidden');
+            cambiaAttivita();
         };
+
 
         // --- FUNZIONI SUPER ADMIN ---
         function caricaAziendeSuperAdmin() {
