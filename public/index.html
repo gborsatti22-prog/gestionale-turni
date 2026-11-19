@@ -133,28 +133,37 @@
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE -->
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE / NOTTURNE / FESTIVE & EXPORT CSV -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">📊 Report e Resoconto Mensile Turni</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Suddivisione automatica ore ordinarie, notturne (22:00–06:00) e festive/domenicali</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
                         <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
                         <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
+                        <button type="button" onclick="esportaReportCSV()" class="bg-emerald-600 hover:bg-emerald-700 transition text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-1.5">
+                            📥 Esporta CSV / Excel
+                        </button>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
+                    <table class="w-full text-left border-collapse text-sm">
                         <thead>
-                            <tr class="border-b bg-gray-100 text-gray-600 text-sm">
+                            <tr class="border-b bg-gray-100 text-gray-600 text-xs uppercase">
                                 <th class="p-3">Dipendente</th>
                                 <th class="p-3">Compiti / Reparti</th>
-                                <th class="p-3 text-center">Totale Turni nel Mese</th>
-                                <th class="p-3 text-right text-indigo-600">Ore Lavorate</th>
+                                <th class="p-3 text-center">Turni</th>
+                                <th class="p-3 text-right">Ordinarie</th>
+                                <th class="p-3 text-right text-purple-700">Notturne</th>
+                                <th class="p-3 text-right text-amber-700">Festive</th>
+                                <th class="p-3 text-right text-rose-700">Nott. Festive</th>
+                                <th class="p-3 text-right text-indigo-700">Totale Ore</th>
                             </tr>
                         </thead>
                         <tbody id="tabella-statistiche"></tbody>
+                        <tfoot id="footer-statistiche"></tfoot>
                     </table>
                 </div>
             </div>
@@ -329,7 +338,6 @@
             return fetch(url, options);
         }
 
-        // Gestore centralizzato per salvataggi/modifiche turno con controllo conflitti e riposo 11h CCNL
         async function inviaRichiestaTurnoConControlli(url, method, payload, onSuccess) {
             const res = await apiFetch(url, {
                 method,
@@ -815,25 +823,82 @@
                 .then(res => res.json())
                 .then(stats => {
                     const tbody = document.getElementById('tabella-statistiche');
+                    const tfoot = document.getElementById('footer-statistiche');
                     tbody.innerHTML = '';
+                    tfoot.innerHTML = '';
+
                     if (!Array.isArray(stats) || stats.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
                         return;
                     }
+
+                    let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totGen = 0;
+
                     stats.forEach(s => {
-                        const oreText = Number(s.totale_ore || 0).toFixed(1);
+                        const ord = Number(s.ore_ordinarie || 0);
+                        const nott = Number(s.ore_notturne || 0);
+                        const fest = Number(s.ore_festive || 0);
+                        const nottFest = Number(s.ore_notturne_festive || 0);
+                        const tot = Number(s.totale_ore || 0);
+
+                        totTurni += Number(s.totale_turni || 0);
+                        totOrd += ord;
+                        totNott += nott;
+                        totFest += fest;
+                        totNottFest += nottFest;
+                        totGen += tot;
+
                         tbody.innerHTML += `
-                            <tr class="border-b">
-                                <td class="p-3 font-bold">${s.nome}</td>
-                                <td class="p-3">${s.reparto || '-'}</td>
+                            <tr class="border-b hover:bg-gray-50">
+                                <td class="p-3 font-bold text-gray-900">${s.nome}</td>
+                                <td class="p-3 text-gray-600">${s.reparto || '-'}</td>
                                 <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
-                                <td class="p-3 text-right text-indigo-700 font-bold">${oreText} h</td>
+                                <td class="p-3 text-right font-medium text-gray-700">${ord.toFixed(1)} h</td>
+                                <td class="p-3 text-right font-semibold text-purple-700">${nott.toFixed(1)} h</td>
+                                <td class="p-3 text-right font-semibold text-amber-700">${fest.toFixed(1)} h</td>
+                                <td class="p-3 text-right font-semibold text-rose-700">${nottFest.toFixed(1)} h</td>
+                                <td class="p-3 text-right text-indigo-700 font-bold">${tot.toFixed(1)} h</td>
                             </tr>
                         `;
                     });
+
+                    tfoot.innerHTML = `
+                        <tr class="bg-indigo-50/70 border-t-2 border-indigo-200 font-bold text-gray-900">
+                            <td class="p-3" colspan="2">TOTALE LOCALE</td>
+                            <td class="p-3 text-center">${totTurni}</td>
+                            <td class="p-3 text-right">${totOrd.toFixed(1)} h</td>
+                            <td class="p-3 text-right text-purple-700">${totNott.toFixed(1)} h</td>
+                            <td class="p-3 text-right text-amber-700">${totFest.toFixed(1)} h</td>
+                            <td class="p-3 text-right text-rose-700">${totNottFest.toFixed(1)} h</td>
+                            <td class="p-3 text-right text-indigo-700">${totGen.toFixed(1)} h</td>
+                        </tr>
+                    `;
                 })
                 .catch(err => console.error("Errore caricamento statistiche:", err));
         }
+
+        window.esportaReportCSV = async function() {
+            const mese = document.getElementById('selettore-mese-stats').value;
+            if (!mese) return alert("Seleziona prima un mese da esportare.");
+
+            try {
+                const res = await apiFetch(`/api/statistiche/mensili/csv?mese=${encodeURIComponent(mese)}`);
+                if (!res.ok) {
+                    return alert("Errore durante la generazione del file CSV.");
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Report_Ore_${mese}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                alert("Impossibile scaricare il file CSV. Verifica la connessione.");
+            }
+        };
 
         // --- SALVATAGGIO DATI ---
         document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
