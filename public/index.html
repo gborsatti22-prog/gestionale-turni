@@ -4,15 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Gestionale Turni</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerie per esportazione reale Excel (.xlsx) e PDF (.pdf) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+    <!-- PWA & Notifiche Push (iOS / Android / Desktop) -->
+    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#111827">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Turni">
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4 md:p-8 max-w-5xl mx-auto">
     
@@ -24,11 +26,11 @@
             
             <!-- STEP 1: CODICE ATTIVITÀ -->
             <div id="blocco-codice" class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                <input type="number" id="login-codice" placeholder="Codice Locale (es. 1)" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-bold bg-yellow-400 outline-none text-center">
+                <input type="number" id="login-codice" placeholder="Codice Locale (es. 1)" onkeydown="if(event.key==='Enter'){event.preventDefault();verificaCodice();}" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-bold bg-yellow-400 outline-none text-center">
                 <button type="button" onclick="verificaCodice()" class="bg-yellow-600 hover:bg-yellow-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Verifica</button>
             </div>
 
-            <!-- STEP 2: LOGIN UTENTE -->
+            <!-- STEP 2: LOGIN UTENTE (Scelta Profilo + Tasto Cambia Locale) -->
             <div id="blocco-utente" class="hidden flex-col md:flex-row gap-2 w-full md:w-auto items-center">
                 <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-medium">
                     <option value="">-- Chi sei? --</option>
@@ -43,12 +45,9 @@
         <!-- BARRA UTENTE LOGGATO -->
         <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-2.5 w-full md:w-auto">
             <span id="nome-loggato" class="text-lg font-medium"></span>
-            <div id="blocco-notifiche-push" class="hidden flex items-center gap-1.5 w-full md:w-auto justify-center">
-                <button type="button" id="btn-attiva-push" onclick="attivaNotifichePush()" class="bg-amber-500 hover:bg-amber-600 transition text-gray-900 px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm">🔔 Attiva Notifiche</button>
-                <button type="button" id="btn-test-push" onclick="inviaNotificaTest()" class="hidden bg-gray-700 hover:bg-gray-600 transition text-white px-2.5 py-2 rounded-lg font-bold text-xs shadow-sm" title="Invia una notifica di prova su questo dispositivo">📨 Test</button>
-            </div>
-            <button id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
-<button type="button" onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
+            <button type="button" id="btn-attiva-notifiche" onclick="attivaNotifichePush()" class="hidden bg-indigo-600 hover:bg-indigo-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-sm w-full md:w-auto shadow-sm">🔔 Attiva Notifiche</button>
+            <button type="button" id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
+            <button type="button" onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
         </div>
     </div>
     
@@ -57,6 +56,7 @@
         <!-- SEZIONE SUPER ADMIN -->
         <div id="sezione-superadmin" class="hidden space-y-6">
             
+            <!-- CREA NUOVA ATTIVITÀ -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-700">
                 <h3 class="text-xl font-bold mb-1 flex items-center gap-2 text-gray-900">👑 Crea Nuova Attività</h3>
                 <p class="text-sm text-gray-500 mb-4">Assegna un codice univoco. La nuova attività partirà completamente vuota con un profilo Titolare pronto all'uso.</p>
@@ -84,10 +84,11 @@
                 </form>
             </div>
 
+            <!-- LISTA TUTTE LE ATTIVITÀ -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-bold text-gray-900">🏢 Attività Registrate nel Sistema</h3>
-                    <button onclick="caricaAziendeSuperAdmin()" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold transition">🔄 Aggiorna</button>
+                    <button type="button" onclick="caricaAziendeSuperAdmin()" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold transition">🔄 Aggiorna</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -109,6 +110,7 @@
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
             
+            <!-- SCHEDA 1: CREA E PROGRAMMA TURNO -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                     <h3 class="text-xl font-bold flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
@@ -139,6 +141,7 @@
                 </form>
             </div>
 
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE/NOTTURNE/FESTIVE ED EXPORT EXCEL/PDF -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
                     <div>
@@ -175,6 +178,7 @@
                 </div>
             </div>
 
+            <!-- SCHEDA 3 & 4: PROFILO & REPARTI/COMPITI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
@@ -199,6 +203,7 @@
                 </div>
             </div>
 
+            <!-- SCHEDA 5 & 6: TEAM E VEICOLI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600 overflow-x-auto">
                     <h3 class="text-xl font-bold mb-4">👥 Personale (Multi-Compito)</h3>
@@ -263,8 +268,8 @@
                 <div class="flex items-center gap-4">
                     <h3 class="text-xl font-bold">📅 Bacheca Turni</h3>
                     <div class="flex bg-gray-200 p-1 rounded-lg border">
-                        <button onclick="cambiaVista('lista')" id="btn-vista-lista" class="px-4 py-1.5 rounded bg-white shadow-sm font-bold text-sm transition">📋 Lista</button>
-                        <button onclick="cambiaVista('calendario')" id="btn-vista-calendario" class="px-4 py-1.5 rounded text-gray-500 hover:text-gray-800 font-bold text-sm transition">📅 Calendario</button>
+                        <button type="button" onclick="cambiaVista('lista')" id="btn-vista-lista" class="px-4 py-1.5 rounded bg-white shadow-sm font-bold text-sm transition">📋 Lista</button>
+                        <button type="button" onclick="cambiaVista('calendario')" id="btn-vista-calendario" class="px-4 py-1.5 rounded text-gray-500 hover:text-gray-800 font-bold text-sm transition">📅 Calendario</button>
                     </div>
                 </div>
                 
@@ -299,8 +304,6 @@
 
     <!-- SCRIPT JAVASCRIPT -->
     <script>
-        const SESSION_STORAGE_KEY = 'gestionale_turni_sessione_v1';
-
         let utenteLoggato = null; 
         let aziendaCorrenteId = null; 
         let superadminToken = null;
@@ -320,193 +323,12 @@
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
         document.getElementById('mese-calendario').value = meseCorrenteStr;
 
-        // Registrazione Service Worker all'avvio
+        // Registrazione preventiva silenziosa del Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => {
-                    console.error('Errore registrazione Service Worker:', err);
-                });
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
             });
         }
-
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-
-        async function aggiornaStatoBottonePush() {
-            const blocco = document.getElementById('blocco-notifiche-push');
-            const btnAttiva = document.getElementById('btn-attiva-push');
-            const btnTest = document.getElementById('btn-test-push');
-
-            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') {
-                blocco.classList.add('hidden');
-                return;
-            }
-
-            blocco.classList.remove('hidden');
-
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                btnAttiva.textContent = '🔕 Push non supportate';
-                btnAttiva.disabled = true;
-                btnAttiva.className = 'bg-gray-600 text-gray-300 px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed';
-                btnTest.classList.add('hidden');
-                return;
-            }
-
-            try {
-                const reg = await navigator.serviceWorker.ready;
-                const sub = await reg.pushManager.getSubscription();
-                if (sub && Notification.permission === 'granted') {
-                    btnAttiva.textContent = '🔔 Notifiche ON';
-                    btnAttiva.className = 'bg-emerald-600 hover:bg-emerald-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm';
-                    btnTest.classList.remove('hidden');
-
-                    // Sincronizza silenziosamente sul server che questo dispositivo appartiene all'utente attuale
-                    apiFetch('/api/push/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            utente_id: utenteLoggato.id,
-                            subscription: sub.toJSON()
-                        })
-                    }).catch(() => {});
-                } else {
-                    btnAttiva.textContent = '🔔 Attiva Notifiche';
-                    btnAttiva.className = 'bg-amber-500 hover:bg-amber-600 transition text-gray-900 px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm';
-                    btnTest.classList.add('hidden');
-                }
-            } catch (e) {
-                console.error('Errore controllo subscription:', e);
-            }
-        }
-
-        window.attivaNotifichePush = async function() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-            if (isIOS && !isStandalone) {
-                return alert(
-                    "📱 Istruzioni per iPhone / iPad:\n\n" +
-                    "Apple consente le notifiche solo se apri l'app dalla schermata Home:\n" +
-                    "1. Tocca l'icona Condividi (quadrato con freccia verso l'alto) in basso su Safari.\n" +
-                    "2. Scegli 'Aggiungi alla schermata Home'.\n" +
-                    "3. Apri la nuova icona dalla schermata Home e premi di nuovo 'Attiva Notifiche'."
-                );
-            }
-
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                return alert("Il tuo browser non supporta le notifiche push.");
-            }
-
-            try {
-                const keyRes = await apiFetch('/api/push/vapid-public-key');
-                const keyData = await keyRes.json();
-                if (!keyData.enabled || !keyData.publicKey) {
-                    return alert("Le chiavi VAPID non sono ancora state configurate nelle variabili d'ambiente su Render.");
-                }
-
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    return alert("Permesso notifiche negato. Puoi riattivarlo dalle impostazioni del browser.");
-                }
-
-                const reg = await navigator.serviceWorker.ready;
-                let sub = await reg.pushManager.getSubscription();
-                if (!sub) {
-                    sub = await reg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
-                    });
-                }
-
-                const saveRes = await apiFetch('/api/push/subscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        utente_id: utenteLoggato.id,
-                        subscription: sub.toJSON()
-                    })
-                });
-                const saveData = await saveRes.json();
-
-                if (saveData.success) {
-                    alert(`✅ Notifiche attivate per ${utenteLoggato.nome}! Riceverai qui solo gli aggiornamenti che ti riguardano.`);
-                    aggiornaStatoBottonePush();
-                } else {
-                    alert(saveData.message || "Errore durante l'attivazione delle notifiche.");
-                }
-            } catch (err) {
-                console.error("Errore attivazione push:", err);
-                alert("Errore durante l'attivazione delle notifiche: " + err.message);
-            }
-        };
-
-        window.inviaNotificaTest = async function() {
-            const res = await apiFetch('/api/push/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    utente_id: utenteLoggato.id,
-                    nome: utenteLoggato.nome
-                })
-            });
-            const data = await res.json();
-            if (!data.success) {
-                alert(data.message || "Impossibile inviare la notifica di prova.");
-            }
-        };
-
-        // --- PERSISTENZA SESSIONE ("RESTA COLLEGATO") ---
-        function salvaSessioneLocale() {
-            if (!utenteLoggato) return;
-            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-                utenteLoggato,
-                aziendaCorrenteId,
-                superadminToken
-            }));
-        }
-
-        function pulisciSessioneLocale() {
-            localStorage.removeItem(SESSION_STORAGE_KEY);
-        }
-
-        function ripristinaSessioneLocale() {
-            try {
-                const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-                if (!raw) return;
-                const saved = JSON.parse(raw);
-                if (!saved || !saved.utenteLoggato) return;
-
-                utenteLoggato = saved.utenteLoggato;
-                aziendaCorrenteId = saved.aziendaCorrenteId;
-                superadminToken = saved.superadminToken || null;
-
-                document.getElementById('form-login').classList.remove('flex');
-                document.getElementById('form-login').classList.add('hidden');
-                document.getElementById('user-info').classList.remove('hidden');
-                document.getElementById('user-info').classList.add('flex');
-                document.getElementById('nome-loggato').innerHTML = `Ciao, <strong>${utenteLoggato.nome}</strong>`;
-                document.getElementById('contenuto-app').classList.remove('hidden');
-
-                if (utenteLoggato.ruolo === 'superadmin') {
-                    mostraPannelloSuperAdmin();
-                } else {
-                    caricaImpostazioni();
-                    attivaVistaAzienda(utenteLoggato.ruolo === 'manager' ? 'manager' : 'staff');
-                }
-            } catch (e) {
-                pulisciSessioneLocale();
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', ripristinaSessioneLocale);
 
         function parseCompiti(repartoStr) {
             if (!repartoStr) return [];
@@ -535,6 +357,7 @@
             return fetch(url, options);
         }
 
+        // Gestore centralizzato per salvataggi/modifiche turno con controllo conflitti e riposo 11h CCNL
         async function inviaRichiestaTurnoConControlli(url, method, payload, onSuccess) {
             const res = await apiFetch(url, {
                 method,
@@ -565,6 +388,109 @@
             return false;
         }
 
+        // --- NOTIFICHE PUSH (COMPATIBILE iOS SAFARI + ANDROID + DESKTOP) ---
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function aggiornaStatoBottoneNotifiche() {
+            const btn = document.getElementById('btn-attiva-notifiche');
+            if (!btn) return;
+            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') {
+                btn.classList.add('hidden');
+                return;
+            }
+            btn.classList.remove('hidden');
+            if ('Notification' in window && Notification.permission === 'granted') {
+                btn.textContent = '🔔 Notifiche Attive';
+                btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+            } else {
+                btn.textContent = '🔔 Attiva Notifiche';
+                btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }
+        }
+
+        window.attivaNotifichePush = async function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+            if (isIOS && !isStandalone) {
+                alert(
+                    "📱 Su iPhone e iPad Apple richiede questo passaggio una sola volta:\n\n" +
+                    "1. Tocca l'icona Condividi in basso (quadrato con freccia verso l'alto)\n" +
+                    "2. Seleziona 'Aggiungi alla schermata Home'\n" +
+                    "3. Apri l'app dalla nuova icona sulla schermata Home e premi 'Attiva Notifiche'."
+                );
+                return;
+            }
+
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                alert("Questo browser non supporta le notifiche push.");
+                return;
+            }
+
+            if (Notification.permission === 'denied') {
+                alert(
+                    "Il permesso notifiche risulta ancora bloccato in memoria.\n\n" +
+                    "Su iPhone: elimina l'icona dalla schermata Home, ricarica la pagina su Safari e riaggiungila alla schermata Home (oppure controlla Impostazioni iPhone > Notifiche)."
+                );
+                return;
+            }
+
+            try {
+                // IMPORTANTE PER iOS: Notification.requestPermission() deve partire IMMEDIATAMENTE al clic, prima di qualsiasi await!
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    alert("Permesso notifiche non concesso. Puoi riattivarlo dalle impostazioni dell'app sul telefono.");
+                    return;
+                }
+
+                aggiornaStatoBottoneNotifiche();
+
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.ready;
+
+                const keyRes = await apiFetch('/api/push/vapid-public-key');
+                if (!keyRes.ok) {
+                    alert("Notifiche consentite sul dispositivo! (Configura le chiavi VAPID sul server per ricevere i messaggi push).");
+                    return;
+                }
+                const keyData = await keyRes.json();
+                if (!keyData.publicKey) {
+                    alert("Notifiche consentite sul dispositivo!");
+                    return;
+                }
+
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+                });
+
+                await apiFetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        utente_id: utenteLoggato.id,
+                        subscription
+                    })
+                });
+
+                alert("✅ Notifiche attivate e collegate al tuo profilo!");
+            } catch (err) {
+                console.error("Errore attivazione notifiche:", err);
+                alert("Errore durante l'attivazione delle notifiche: " + (err.message || err));
+            }
+        };
+
         // --- GESTIONE LOGIN & LOGOUT ---
         window.verificaCodice = function() {
             const codice = document.getElementById('login-codice').value;
@@ -594,7 +520,7 @@
                         alert(data.message);
                     }
                 })
-                .catch(() => alert("Errore di connessione al server."));
+                .catch(() => alert("Errore di connessione al server. Attendi qualche secondo se il server si sta riavviando e riprova."));
         };
 
         window.cambiaAttivita = function() {
@@ -602,12 +528,12 @@
             aziendaCorrenteId = null;
             superadminToken = null;
             turniGlobal = [];
-            pulisciSessioneLocale();
             
             document.getElementById('contenuto-app').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('user-info').classList.remove('flex');
             document.getElementById('btn-torna-superadmin').classList.add('hidden');
+            document.getElementById('btn-attiva-notifiche').classList.add('hidden');
             
             const formLogin = document.getElementById('form-login');
             formLogin.classList.remove('hidden');
@@ -637,7 +563,6 @@
                     if (data.superadminToken) {
                         superadminToken = data.superadminToken;
                     }
-                    salvaSessioneLocale();
 
                     document.getElementById('form-login').classList.remove('flex');
                     document.getElementById('form-login').classList.add('hidden');
@@ -664,7 +589,7 @@
             document.getElementById('header-business').innerHTML = 'Console Super Admin 👑';
             document.getElementById('page-title').textContent = 'Super Admin - Gestionale Turni';
             document.getElementById('btn-torna-superadmin').classList.add('hidden');
-            document.getElementById('blocco-notifiche-push').classList.add('hidden');
+            document.getElementById('btn-attiva-notifiche').classList.add('hidden');
 
             document.getElementById('sezione-superadmin').classList.remove('hidden');
             document.getElementById('sezione-manager').classList.add('hidden');
@@ -681,8 +606,7 @@
             if (superadminToken) {
                 document.getElementById('btn-torna-superadmin').classList.remove('hidden');
             }
-
-            aggiornaStatoBottonePush();
+            aggiornaStatoBottoneNotifiche();
 
             if (ruolo === 'manager') {
                 document.getElementById('sezione-manager').classList.remove('hidden');
@@ -714,11 +638,10 @@
 
         window.tornaSuperAdmin = function() {
             utenteLoggato = { id: 0, nome: 'Super Admin', ruolo: 'superadmin', azienda_id: 0 };
-            salvaSessioneLocale();
             mostraPannelloSuperAdmin();
         };
         
-          window.eseguiLogout = function() {
+        window.eseguiLogout = function() {
             try {
                 localStorage.clear();
                 sessionStorage.clear();
@@ -729,7 +652,6 @@
             document.getElementById('bacheca-turni').classList.add('hidden');
             cambiaAttivita();
         };
-
 
         // --- FUNZIONI SUPER ADMIN ---
         function caricaAziendeSuperAdmin() {
@@ -756,9 +678,9 @@
                                 <td class="p-3 text-center text-sm text-gray-600">${az.totale_utenti}</td>
                                 <td class="p-3 text-center text-sm text-gray-600">${az.totale_turni}</td>
                                 <td class="p-3 text-right flex flex-wrap justify-end gap-2">
-                                    <button onclick="entraInAziendaSuperAdmin(${az.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🔑 Gestisci</button>
-                                    <button onclick="cambiaCodiceAziendaSuperAdmin(${az.id})" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Cambia Codice Locale">✏️ Codice</button>
-                                    <button onclick="eliminaAziendaSuperAdmin(${az.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Elimina Attività">🗑️</button>
+                                    <button type="button" onclick="entraInAziendaSuperAdmin(${az.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition">🔑 Gestisci</button>
+                                    <button type="button" onclick="cambiaCodiceAziendaSuperAdmin(${az.id})" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Cambia Codice Locale">✏️ Codice</button>
+                                    <button type="button" onclick="eliminaAziendaSuperAdmin(${az.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm transition" title="Elimina Attività">🗑️</button>
                                 </td>
                             </tr>
                         `;
@@ -832,7 +754,6 @@
                         aziendaCorrenteId = data.azienda.id;
                         utenteLoggato = data.utente;
                         nomeAttivitaCorrente = data.azienda.nome_locale;
-                        salvaSessioneLocale();
                         caricaImpostazioni();
                         attivaVistaAzienda('manager');
                     } else {
@@ -958,7 +879,6 @@
                     const updatedMe = utenti.find(u => u.id === utenteLoggato.id);
                     if (updatedMe) {
                         utenteLoggato.reparto = updatedMe.reparto;
-                        salvaSessioneLocale();
                         aggiornaCompitiPropostaStaff();
                     }
                 }
@@ -1030,7 +950,7 @@
                 veicoli.forEach(v => {
                     selVeicolo.innerHTML += `<option value="${v.id}">🚗 ${v.nome}</option>`;
                     tabVeicoli.innerHTML += `<tr class="border-b"><td class="p-2">${v.nome}</td><td class="p-2 text-right">
-                    <button onclick="eliminaVeicolo(${v.id})" class="text-red-500">🗑️</button></td></tr>`;
+                    <button type="button" onclick="eliminaVeicolo(${v.id})" class="text-red-500">🗑️</button></td></tr>`;
                 });
             });
         }
@@ -1093,6 +1013,7 @@
 
             const wb = XLSX.utils.book_new();
 
+            // Foglio 1: Riepilogo Mensile
             const righeRiepilogo = [
                 [`PROSPETTO ORE LAVORATE - ${nomeAttivitaCorrente.toUpperCase()}`],
                 [`Mese di riferimento: ${mese}`, '', 'Fascia notturna: 22:00 - 06:00 | Festive: Domeniche e festività nazionali'],
@@ -1145,6 +1066,7 @@
             ];
             XLSX.utils.book_append_sheet(wb, wsRiepilogo, 'Riepilogo Mensile');
 
+            // Foglio 2: Dettaglio Giornaliero Turni
             const righeDettaglio = [
                 [`DETTAGLIO TURNI DEL MESE (${mese}) - ${nomeAttivitaCorrente.toUpperCase()}`],
                 [],
@@ -1192,6 +1114,7 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
+            // Intestazione scura
             doc.setFillColor(17, 24, 39);
             doc.rect(0, 0, 297, 26, 'F');
 
@@ -1204,6 +1127,7 @@
             doc.setFont('helvetica', 'normal');
             doc.text(`Mese di riferimento: ${mese}   |   Documento per Consulente del Lavoro`, 14, 19);
 
+            // Tabella Riepilogo
             let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
             const bodyRiepilogo = stats.map(s => {
                 const ord = Number(s.ore_ordinarie || 0);
@@ -1264,12 +1188,14 @@
             doc.setFontSize(8.5);
             doc.text('Criteri di calcolo: Ore Notturne = fascia 22:00 - 06:00 | Ore Festive = Domeniche e festività nazionali italiane.', 14, afterTableY);
 
+            // Spazio firma
             const oggiFormat = new Date().toLocaleDateString('it-IT');
             doc.setTextColor(30, 30, 30);
             doc.setFontSize(9.5);
             doc.text(`Data generazione: ${oggiFormat}`, 14, afterTableY + 12);
             doc.text('Timbro e Firma Titolare: __________________________________________', 165, afterTableY + 12);
 
+            // Pagina 2: Dettaglio turni del mese
             if (dettaglio.length > 0) {
                 doc.addPage();
                 doc.setFillColor(17, 24, 39);
@@ -1507,7 +1433,7 @@
                             <div class="text-sm text-gray-600">Motivo: <em>${turno.orario}</em></div></div>`;
                     
                     if (isManager || isProprietario) {
-                        html += `<div class="mt-2 md:mt-0 flex gap-2"><button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Annulla</button></div>`;
+                        html += `<div class="mt-2 md:mt-0 flex gap-2"><button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Annulla</button></div>`;
                     }
                 } else if (turno.stato === 'proposta') {
                     div.className = `p-4 rounded-lg border-l-4 border-yellow-500 bg-yellow-50 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center`;
@@ -1515,10 +1441,10 @@
                         <div class="text-gray-700">👤 ${turno.nome_proprietario || 'Dipendente'} ${turno.reparto ? `- Compito: <strong>${turno.reparto}</strong>` : ''}</div></div>`;
                     
                     if (isManager) {
-                        html += `<div class="mt-2 md:mt-0 flex gap-2"><button class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="confermaTurno(${turno.id})">✅ Conferma</button>
-                        <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Rifiuta</button></div>`;
+                        html += `<div class="mt-2 md:mt-0 flex gap-2"><button type="button" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="confermaTurno(${turno.id})">✅ Conferma</button>
+                        <button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Rifiuta</button></div>`;
                     } else if (isProprietario) {
-                        html += `<div class="mt-2 md:mt-0"><button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Ritira Proposta</button></div>`;
+                        html += `<div class="mt-2 md:mt-0"><button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Ritira Proposta</button></div>`;
                     }
                 } else if (turno.stato === 'scambio') {
                     div.className = `p-4 rounded-lg border-l-4 border-purple-500 bg-purple-50 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3`;
@@ -1531,16 +1457,16 @@
                     <div class="flex flex-wrap gap-2">`;
 
                     if (puoAccettareScambio) {
-                        html += `<button class="bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-1.5 rounded font-bold text-sm shadow-sm" onclick="accettaScambio(${turno.id})">✋ Accetta Scambio</button>`;
+                        html += `<button type="button" class="bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-1.5 rounded font-bold text-sm shadow-sm" onclick="accettaScambio(${turno.id})">✋ Accetta Scambio</button>`;
                     } else if (!isManager && !isProprietario) {
                         html += `<span class="text-xs font-semibold text-gray-500 bg-white border px-2.5 py-1.5 rounded">Solo reparto: ${turno.reparto || '-'}</span>`;
                     }
 
                     if (isProprietario || isManager) {
-                        html += `<button class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
+                        html += `<button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
                     }
                     if (isManager) {
-                        html += `<button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
+                        html += `<button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
                     }
                     html += `</div>`;
                 } else if (turno.stato === 'scambio_proposto') {
@@ -1555,14 +1481,14 @@
 
                     if (isManager) {
                         html += `
-                            <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="approvaScambio(${turno.id})">✅ Approva Scambio</button>
-                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="rifiutaScambio(${turno.id})">❌ Rifiuta</button>`;
+                            <button type="button" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="approvaScambio(${turno.id})">✅ Approva Scambio</button>
+                            <button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="rifiutaScambio(${turno.id})">❌ Rifiuta</button>`;
                     } else {
                         if (isSostituto) {
-                            html += `<button class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="ritiraScambio(${turno.id})">↩️ Ritira Disponibilità</button>`;
+                            html += `<button type="button" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="ritiraScambio(${turno.id})">↩️ Ritira Disponibilità</button>`;
                         }
                         if (isProprietario) {
-                            html += `<button class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
+                            html += `<button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="annullaScambio(${turno.id})">❌ Annulla Scambio</button>`;
                         }
                     }
                     html += `</div>`;
@@ -1577,12 +1503,12 @@
                     <div class="flex flex-wrap gap-2">`;
                     
                     if (isProprietario) {
-                        html += `<button class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="richiediScambio(${turno.id})">🔄 Proponi Scambio</button>`;
+                        html += `<button type="button" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="richiediScambio(${turno.id})">🔄 Proponi Scambio</button>`;
                     }
                     if (isManager) {
                         html += `
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${orarioSafe}')">✏️ Modifica Orario</button>
-                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
+                            <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="modificaOrario(${turno.id}, '${orarioSafe}')">✏️ Modifica Orario</button>
+                            <button type="button" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-bold text-sm shadow-sm" onclick="eliminaTurno(${turno.id})">🗑️ Elimina</button>`;
                     }
                     html += `</div>`;
                 }
@@ -1648,7 +1574,7 @@
                             <div class="p-1.5 rounded border-l-4 border-red-500 bg-red-50 text-red-900 text-xs leading-tight">
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold">🚫 ${turno.nome_proprietario || 'Dipendente'}</span>
-                                    ${(isManager || isProprietario) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Annulla assenza">✕</button>` : ''}
+                                    ${(isManager || isProprietario) ? `<button type="button" onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Annulla assenza">✕</button>` : ''}
                                 </div>
                                 <div class="text-[11px] text-red-700 italic truncate" title="${turno.orario}">${turno.orario}</div>
                             </div>`;
@@ -1658,8 +1584,8 @@
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold">✋ ${turno.nome_proprietario || 'Dipendente'}</span>
                                     <div class="flex gap-1 shrink-0">
-                                        ${isManager ? `<button onclick="confermaTurno(${turno.id})" class="text-green-600 hover:text-green-800 font-bold" title="Conferma">✓</button>` : ''}
-                                        ${(isManager || isProprietario) ? `<button onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Elimina">✕</button>` : ''}
+                                        ${isManager ? `<button type="button" onclick="confermaTurno(${turno.id})" class="text-green-600 hover:text-green-800 font-bold" title="Conferma">✓</button>` : ''}
+                                        ${(isManager || isProprietario) ? `<button type="button" onclick="eliminaTurno(${turno.id})" class="text-red-600 hover:text-red-800 font-bold" title="Elimina">✕</button>` : ''}
                                     </div>
                                 </div>
                                 <div class="text-[11px] font-semibold text-yellow-800">${turno.orario}</div>
@@ -1669,11 +1595,11 @@
                             <div class="p-1.5 rounded border-l-4 border-purple-500 bg-purple-50 text-purple-950 text-xs leading-tight">
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold truncate">🔄 ${turno.nome_proprietario || 'Dipendente'}</span>
-                                    ${(isProprietario || isManager) ? `<button onclick="annullaScambio(${turno.id})" class="text-gray-600 hover:text-gray-900 font-bold" title="Annulla scambio">✕</button>` : ''}
+                                    ${(isProprietario || isManager) ? `<button type="button" onclick="annullaScambio(${turno.id})" class="text-gray-600 hover:text-gray-900 font-bold" title="Annulla scambio">✕</button>` : ''}
                                 </div>
                                 <div class="text-[11px] font-semibold text-purple-800">${turno.orario}</div>
                                 <div class="text-[10px] text-purple-700 truncate">${turno.reparto || '-'}</div>
-                                ${puoAccettareScambio ? `<button onclick="accettaScambio(${turno.id})" class="mt-1 w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-0.5 px-1.5 rounded">✋ Accetta</button>` : ''}
+                                ${puoAccettareScambio ? `<button type="button" onclick="accettaScambio(${turno.id})" class="mt-1 w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-0.5 px-1.5 rounded">✋ Accetta</button>` : ''}
                             </div>`;
                     } else if (turno.stato === 'scambio_proposto') {
                         html += `
@@ -1683,10 +1609,10 @@
                                 <div class="text-[10px] text-gray-600 truncate">${turno.reparto || '-'}</div>
                                 ${isManager ? `
                                     <div class="mt-1 flex gap-1">
-                                        <button onclick="approvaScambio(${turno.id})" class="flex-1 bg-green-600 text-white text-[10px] font-bold py-0.5 rounded" title="Approva scambio">✓ Sì</button>
-                                        <button onclick="rifiutaScambio(${turno.id})" class="flex-1 bg-red-500 text-white text-[10px] font-bold py-0.5 rounded" title="Rifiuta scambio">✕ No</button>
+                                        <button type="button" onclick="approvaScambio(${turno.id})" class="flex-1 bg-green-600 text-white text-[10px] font-bold py-0.5 rounded" title="Approva scambio">✓ Sì</button>
+                                        <button type="button" onclick="rifiutaScambio(${turno.id})" class="flex-1 bg-red-500 text-white text-[10px] font-bold py-0.5 rounded" title="Rifiuta scambio">✕ No</button>
                                     </div>` : ''}
-                                ${isSostituto ? `<button onclick="ritiraScambio(${turno.id})" class="mt-1 w-full bg-amber-600 text-white text-[10px] font-bold py-0.5 rounded">↩️ Ritira</button>` : ''}
+                                ${isSostituto ? `<button type="button" onclick="ritiraScambio(${turno.id})" class="mt-1 w-full bg-amber-600 text-white text-[10px] font-bold py-0.5 rounded">↩️ Ritira</button>` : ''}
                             </div>`;
                     } else {
                         html += `
@@ -1694,10 +1620,10 @@
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="font-bold truncate">${turno.nome_proprietario || 'Dipendente'}</span>
                                     <div class="flex gap-1 shrink-0">
-                                        ${isProprietario ? `<button onclick="richiediScambio(${turno.id})" class="text-purple-600 hover:text-purple-800" title="Proponi scambio">🔄</button>` : ''}
+                                        ${isProprietario ? `<button type="button" onclick="richiediScambio(${turno.id})" class="text-purple-600 hover:text-purple-800" title="Proponi scambio">🔄</button>` : ''}
                                         ${isManager ? `
-                                            <button onclick="modificaOrario(${turno.id}, '${orarioSafe}')" class="text-blue-600 hover:text-blue-800" title="Modifica orario">✏️</button>
-                                            <button onclick="eliminaTurno(${turno.id})" class="text-red-500 hover:text-red-700 font-bold" title="Elimina turno">✕</button>` : ''}
+                                            <button type="button" onclick="modificaOrario(${turno.id}, '${orarioSafe}')" class="text-blue-600 hover:text-blue-800" title="Modifica orario">✏️</button>
+                                            <button type="button" onclick="eliminaTurno(${turno.id})" class="text-red-500 hover:text-red-700 font-bold" title="Elimina turno">✕</button>` : ''}
                                     </div>
                                 </div>
                                 <div class="text-[11px] font-semibold text-blue-800">${turno.orario}</div>

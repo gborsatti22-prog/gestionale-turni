@@ -2,26 +2,12 @@ const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
 const cors = require('cors');
-const webpush = require('web-push');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const SUPERADMIN_CODE = 0;
 const SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || 'superadmin123';
-
-// Configurazione Web Push (chiavi VAPID da variabili d'ambiente Render)
-const pushEnabled = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
-if (pushEnabled) {
-    webpush.setVapidDetails(
-        process.env.VAPID_SUBJECT || 'mailto:admin@gestionale-turni.app',
-        process.env.VAPID_PUBLIC_KEY,
-        process.env.VAPID_PRIVATE_KEY
-    );
-    console.log("🔔 Web Push VAPID configurato correttamente.");
-} else {
-    console.log("⚠️ Chiavi VAPID non impostate: notifiche push disattivate finché non aggiungi VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY.");
-}
 
 app.use(express.json());
 app.use(cors());
@@ -60,14 +46,6 @@ function creaTabelle() {
             stato TEXT,
             azienda_id INTEGER
         );
-        CREATE TABLE IF NOT EXISTS push_subscriptions (
-            id SERIAL PRIMARY KEY,
-            utente_id INTEGER NOT NULL,
-            azienda_id INTEGER NOT NULL,
-            endpoint TEXT UNIQUE NOT NULL,
-            p256dh TEXT NOT NULL,
-            auth TEXT NOT NULL
-        );
     `;
     pool.query(queries, (err) => {
         if (err) console.error("Errore creazione tabelle:", err);
@@ -97,73 +75,6 @@ function parseCompitiList(repartoStr) {
         .split(',')
         .map(s => s.trim())
         .filter(Boolean);
-}
-
-// --- HELPER INVIO NOTIFICHE PUSH MIRATE ---
-async function inviaNotificaUtente(utenteId, aziendaId, titolo, messaggio, url = '/') {
-    if (!pushEnabled || !utenteId) return;
-    try {
-        const subs = await pool.query(
-            "SELECT * FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2",
-            [Number(utenteId), Number(aziendaId)]
-        );
-        if (subs.rows.length === 0) return;
-
-        const payload = JSON.stringify({ title: titolo, body: messaggio, url });
-
-        for (const sub of subs.rows) {
-            const pushConfig = {
-                endpoint: sub.endpoint,
-                keys: { p256dh: sub.p256dh, auth: sub.auth }
-            };
-            try {
-                await webpush.sendNotification(pushConfig, payload);
-            } catch (err) {
-                if (err.statusCode === 410 || err.statusCode === 404) {
-                    await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [sub.id]);
-                } else {
-                    console.error("Errore invio push singolo:", err.message);
-                }
-            }
-        }
-    } catch (err) {
-        console.error("Errore inviaNotificaUtente:", err.message);
-    }
-}
-
-async function inviaNotificaManagers(aziendaId, titolo, messaggio, url = '/') {
-    if (!pushEnabled) return;
-    try {
-        const mgrs = await pool.query(
-            "SELECT id FROM utenti WHERE azienda_id = $1 AND ruolo = 'manager'",
-            [Number(aziendaId)]
-        );
-        for (const m of mgrs.rows) {
-            await inviaNotificaUtente(m.id, aziendaId, titolo, messaggio, url);
-        }
-    } catch (err) {
-        console.error("Errore inviaNotificaManagers:", err.message);
-    }
-}
-
-async function inviaNotificaReparto(aziendaId, repartoNome, escludiUtenteId, titolo, messaggio, url = '/') {
-    if (!pushEnabled || !repartoNome) return;
-    try {
-        const targetRep = String(repartoNome).trim().toLowerCase();
-        const staffRes = await pool.query(
-            "SELECT id, reparto FROM utenti WHERE azienda_id = $1 AND ruolo != 'manager'",
-            [Number(aziendaId)]
-        );
-        for (const u of staffRes.rows) {
-            if (Number(u.id) === Number(escludiUtenteId)) continue;
-            const compiti = parseCompitiList(u.reparto).map(c => c.toLowerCase());
-            if (compiti.includes(targetRep)) {
-                await inviaNotificaUtente(u.id, aziendaId, titolo, messaggio, url);
-            }
-        }
-    } catch (err) {
-        console.error("Errore inviaNotificaReparto:", err.message);
-    }
 }
 
 // --- HELPER CONTROLLO CONFLITTI E RIPOSO CCNL (11 ORE) ---
@@ -228,15 +139,26 @@ function isGiornoFestivoItalia(giornoStr) {
     const [anno, mese, day] = giornoStr.split('-').map(Number);
     const dataUTC = new Date(Date.UTC(anno, mese - 1, day));
 
+    // Domenica
     if (dataUTC.getUTCDay() === 0) return true;
 
+    // Festività nazionali fisse
     const mmdd = `${String(mese).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const festiviFissi = [
-        '01-01', '01-06', '04-25', '05-01', '06-02',
-        '08-15', '11-01', '12-08', '12-25', '12-26'
+        '01-01', // Capodanno
+        '01-06', // Epifania
+        '04-25', // Liberazione
+        '05-01', // Festa dei Lavoratori
+        '06-02', // Festa della Repubblica
+        '08-15', // Ferragosto
+        '11-01', // Ognissanti
+        '12-08', // Immacolata Concezione
+        '12-25', // Natale
+        '12-26'  // Santo Stefano
     ];
     if (festiviFissi.includes(mmdd)) return true;
 
+    // Pasqua e Lunedì dell'Angelo (Pasquetta)
     const pasqua = calcolaPasquaUTC(anno);
     const pasquetta = new Date(pasqua.getTime() + 24 * 60 * 60 * 1000);
     const pasquaStr = pasqua.toISOString().split('T')[0];
@@ -267,6 +189,7 @@ function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
         const mod = m % 1440;
         const dataCorrente = dayOffset === 0 ? giornoStr : spostaGiornoStr(giornoStr, dayOffset);
 
+        // Fascia notturna CCNL: 22:00 - 06:00
         const isNotturno = (mod >= 22 * 60 || mod < 6 * 60);
         const isFestivo = isGiornoFestivoItalia(dataCorrente);
 
@@ -317,6 +240,7 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
         const nomeDip = mappaUtenti[uid] || 'Il dipendente';
         const intervalloCand = parseIntervalloMinuti(cand.giorno, cand.orario);
 
+        // 1. Controllo assenza/indisponibilità nello stesso giorno
         const assenza = turniEsistenti.find(
             t => Number(t.utente_id) === uid && t.giorno === cand.giorno && t.stato === 'indisponibile'
         );
@@ -333,6 +257,7 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
             if (!statiAttivi.includes(es.stato)) continue;
             const intervalloEs = parseIntervalloMinuti(es.giorno, es.orario);
 
+            // 2. Controllo sovrapposizione oraria dello stesso dipendente
             if (Number(es.utente_id) === uid) {
                 if (intervalloCand && intervalloEs) {
                     const siSovrappongono =
@@ -346,6 +271,7 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
                         };
                     }
 
+                    // 4. Controllo riposo minimo 11 ore (660 minuti) CCNL
                     let gapMinuti = null;
                     if (intervalloEs.endEpochMin <= intervalloCand.startEpochMin) {
                         gapMinuti = intervalloCand.startEpochMin - intervalloEs.endEpochMin;
@@ -367,6 +293,7 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
                 }
             }
 
+            // 3. Controllo veicolo già impegnato nella stessa fascia oraria
             if (vid && es.veicolo_id && Number(es.veicolo_id) === vid) {
                 const nomeMezzo = mappaVeicoli[vid] || es.nome_veicolo || 'Veicolo';
                 const altroRider = es.nome_proprietario || mappaUtenti[Number(es.utente_id)] || 'un altro dipendente';
@@ -409,7 +336,7 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
     };
 }
 
-// --- HEALTHCHECK LEGGERO ---
+// --- HEALTHCHECK LEGGERO (NON TOCCA IL DB) ---
 app.get('/ping', (req, res) => res.status(200).send('OK'));
 
 // --- MIDDLEWARE DI SICUREZZA MULTI-TENANT & SUPER ADMIN ---
@@ -433,75 +360,6 @@ app.use('/api', (req, res, next) => {
     
     req.azienda_id = aziendaId;
     next();
-});
-
-// --- API NOTIFICHE PUSH ---
-app.get('/api/push/vapid-public-key', (req, res) => {
-    res.json({
-        enabled: pushEnabled,
-        publicKey: process.env.VAPID_PUBLIC_KEY || ''
-    });
-});
-
-app.post('/api/push/subscribe', async (req, res) => {
-    try {
-        if (!pushEnabled) {
-            return res.json({ success: false, message: "Chiavi VAPID non ancora configurate sul server Render." });
-        }
-        const { utente_id, subscription } = req.body;
-        if (!utente_id || !subscription || !subscription.endpoint || !subscription.keys) {
-            return res.status(400).json({ success: false, message: "Dati sottoscrizione non validi." });
-        }
-
-        await pool.query(
-            `INSERT INTO push_subscriptions (utente_id, azienda_id, endpoint, p256dh, auth)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (endpoint)
-             DO UPDATE SET utente_id = $1, azienda_id = $2, p256dh = $4, auth = $5`,
-            [
-                Number(utente_id),
-                Number(req.azienda_id),
-                subscription.endpoint,
-                subscription.keys.p256dh,
-                subscription.keys.auth
-            ]
-        );
-
-        res.json({ success: true });
-    } catch (err) {
-        console.error("Errore salvataggio push subscription:", err.message);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/push/unsubscribe', async (req, res) => {
-    try {
-        const { endpoint } = req.body;
-        if (endpoint) {
-            await pool.query("DELETE FROM push_subscriptions WHERE endpoint = $1", [endpoint]);
-        }
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/push/test', async (req, res) => {
-    try {
-        if (!pushEnabled) {
-            return res.json({ success: false, message: "Notifiche non configurate sul server." });
-        }
-        const { utente_id, nome } = req.body;
-        await inviaNotificaUtente(
-            utente_id,
-            req.azienda_id,
-            "🔔 Notifiche Attive!",
-            `Ciao ${nome || ''}, riceverai qui gli aggiornamenti sui tuoi turni.`
-        );
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
 });
 
 // --- API VERIFICA CODICE & LOGIN ---
@@ -647,7 +505,6 @@ app.put('/api/superadmin/aziende/:id/codice', async (req, res) => {
         await client.query("UPDATE utenti SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
         await client.query("UPDATE veicoli SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
         await client.query("UPDATE turni SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
-        await client.query("UPDATE push_subscriptions SET azienda_id = $1 WHERE azienda_id = $2", [nuovoCodice, vecchioCodice]);
 
         await client.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
 
@@ -665,7 +522,6 @@ app.put('/api/superadmin/aziende/:id/codice', async (req, res) => {
 app.delete('/api/superadmin/aziende/:id', async (req, res) => {
     try {
         const idNum = parseInt(req.params.id, 10);
-        await pool.query("DELETE FROM push_subscriptions WHERE azienda_id = $1", [idNum]);
         await pool.query("DELETE FROM turni WHERE azienda_id = $1", [idNum]);
         await pool.query("DELETE FROM veicoli WHERE azienda_id = $1", [idNum]);
         await pool.query("DELETE FROM reparti WHERE azienda_id = $1", [idNum]);
@@ -808,7 +664,6 @@ app.put('/api/utenti/:id/reparti', async (req, res) => {
 
 app.delete('/api/utenti/:id', async (req, res) => {
     try {
-        await pool.query("DELETE FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         await pool.query("DELETE FROM utenti WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -839,7 +694,7 @@ app.delete('/api/veicoli/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- API TURNI & SCAMBI (CON NOTIFICHE PUSH MIRATE) ---
+// --- API TURNI & SCAMBI ---
 app.get('/api/turni', async (req, res) => {
     try {
         const query = `
@@ -863,11 +718,9 @@ app.post('/api/turni', async (req, res) => {
         let numSettimane = parseInt(ricorrenza, 10) || 1;
         let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id, 10) : null;
 
-        const uRes = await pool.query("SELECT nome, reparto FROM utenti WHERE id = $1", [utente_id]);
-        const nomeDipendente = uRes.rows.length > 0 ? uRes.rows[0].nome : 'Dipendente';
-
         let repartoFinale = (reparto || '').trim();
         if (!repartoFinale && stato !== 'indisponibile') {
+            const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
             const compitiUtente = uRes.rows.length > 0 ? parseCompitiList(uRes.rows[0].reparto) : [];
             repartoFinale = compitiUtente[0] || null;
         }
@@ -903,27 +756,6 @@ app.post('/api/turni', async (req, res) => {
                 [cand.giorno, cand.orario, cand.utente_id, cand.reparto, cand.veicolo_id, stato, req.azienda_id]
             );
         }
-
-        // Invio notifica mirata
-        if (stato === 'confermato') {
-            const testoNotifica = numSettimane > 1
-                ? `Nuovi turni ricorrenti (${numSettimane} settimane) dal ${giorno} | ${orario}${repartoFinale ? ` (${repartoFinale})` : ''}.`
-                : `${giorno} | ${orario}${repartoFinale ? ` - Compito: ${repartoFinale}` : ''}`;
-            inviaNotificaUtente(utente_id, req.azienda_id, "📅 Nuovo Turno Assegnato", testoNotifica);
-        } else if (stato === 'proposta') {
-            inviaNotificaManagers(
-                req.azienda_id,
-                "✋ Nuova Proposta Turno",
-                `${nomeDipendente} ha proposto disponibilità per il ${giorno} (${orario})${numSettimane > 1 ? ` x ${numSettimane} sett.` : ''}.`
-            );
-        } else if (stato === 'indisponibile') {
-            inviaNotificaManagers(
-                req.azienda_id,
-                "🚫 Assenza / Indisponibilità Segnalata",
-                `${nomeDipendente} non è disponibile il ${giorno} (${orario}).`
-            );
-        }
-
         res.json({ success: true });
     } catch (err) { 
         console.error("Errore salvataggio turno:", err.message);
@@ -933,32 +765,7 @@ app.post('/api/turni', async (req, res) => {
 
 app.delete('/api/turni/:id', async (req, res) => {
     try {
-        const turnoRes = await pool.query(
-            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
-            [req.params.id, req.azienda_id]
-        );
-        const t = turnoRes.rows[0];
-
         await pool.query("DELETE FROM turni WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
-
-        if (t && t.utente_id) {
-            if (t.stato === 'proposta') {
-                inviaNotificaUtente(
-                    t.utente_id,
-                    req.azienda_id,
-                    "❌ Proposta Turno Rifiutata",
-                    `La tua disponibilità per il ${t.giorno} (${t.orario}) non è stata confermata.`
-                );
-            } else if (t.stato !== 'indisponibile') {
-                inviaNotificaUtente(
-                    t.utente_id,
-                    req.azienda_id,
-                    "🗑️ Turno Annullato",
-                    `Il tuo turno del ${t.giorno} (${t.orario}) è stato rimosso.`
-                );
-            }
-        }
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -982,14 +789,6 @@ app.put('/api/turni/:id', async (req, res) => {
             "UPDATE turni SET giorno = $1, orario = $2, utente_id = $3, reparto = $4, veicolo_id = $5 WHERE id = $6 AND azienda_id = $7", 
             [giorno, orario, utente_id, reparto, veicolo_id || null, req.params.id, req.azienda_id]
         );
-
-        inviaNotificaUtente(
-            utente_id,
-            req.azienda_id,
-            "✏️ Turno Modificato",
-            `Aggiornamento turno: ${giorno} | ${orario}${reparto ? ` (${reparto})` : ''}.`
-        );
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1021,14 +820,6 @@ app.put('/api/turni/:id/orario', async (req, res) => {
             "UPDATE turni SET orario = $1 WHERE id = $2 AND azienda_id = $3", 
             [req.body.orario, req.params.id, req.azienda_id]
         );
-
-        inviaNotificaUtente(
-            t.utente_id,
-            req.azienda_id,
-            "🕒 Orario Turno Modificato",
-            `Il turno del ${t.giorno} ha un nuovo orario: ${req.body.orario}.`
-        );
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1057,14 +848,6 @@ app.put('/api/turni/:id/conferma', async (req, res) => {
         }
 
         await pool.query("UPDATE turni SET stato = 'confermato' WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
-
-        inviaNotificaUtente(
-            t.utente_id,
-            req.azienda_id,
-            "✅ Proposta Turno Confermata",
-            `Il Titolare ha confermato il tuo turno del ${t.giorno} (${t.orario}).`
-        );
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1079,29 +862,10 @@ app.put('/api/turni/:id/stato', async (req, res) => {
 // --- ENDPOINT SCAMBIO TURNO ---
 app.put('/api/turni/:id/richiedi-scambio', async (req, res) => {
     try {
-        const turnoRes = await pool.query(
-            `SELECT t.*, u.nome AS nome_proprietario
-             FROM turni t LEFT JOIN utenti u ON t.utente_id = u.id
-             WHERE t.id = $1 AND t.azienda_id = $2`,
-            [req.params.id, req.azienda_id]
-        );
-        const t = turnoRes.rows[0];
-
         await pool.query(
             "UPDATE turni SET stato = 'scambio', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2 AND stato = 'confermato'",
             [req.params.id, req.azienda_id]
         );
-
-        if (t && t.reparto) {
-            inviaNotificaReparto(
-                req.azienda_id,
-                t.reparto,
-                t.utente_id,
-                `🔄 Scambio Turno (${t.reparto})`,
-                `${t.nome_proprietario || 'Un collega'} cerca sostituto per il ${t.giorno} (${t.orario}).`
-            );
-        }
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1124,9 +888,7 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
         }
 
         const turnoRes = await pool.query(
-            `SELECT t.*, u.nome AS nome_proprietario
-             FROM turni t LEFT JOIN utenti u ON t.utente_id = u.id
-             WHERE t.id = $1 AND t.azienda_id = $2`,
+            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
             [req.params.id, req.azienda_id]
         );
         if (turnoRes.rows.length === 0) {
@@ -1142,7 +904,7 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
         }
 
         const candidatoRes = await pool.query(
-            "SELECT id, nome, reparto FROM utenti WHERE id = $1 AND azienda_id = $2",
+            "SELECT id, reparto FROM utenti WHERE id = $1 AND azienda_id = $2",
             [sostitutoId, req.azienda_id]
         );
         if (candidatoRes.rows.length === 0) {
@@ -1172,20 +934,6 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
             "UPDATE turni SET stato = 'scambio_proposto', sostituto_id = $1 WHERE id = $2 AND azienda_id = $3",
             [sostitutoId, req.params.id, req.azienda_id]
         );
-
-        const nomeSostituto = candidatoRes.rows[0].nome;
-        inviaNotificaUtente(
-            turno.utente_id,
-            req.azienda_id,
-            "🤝 Collega Disponibile per Scambio",
-            `${nomeSostituto} si è proposto per il tuo turno del ${turno.giorno} (${turno.orario}). In attesa approvazione Titolare.`
-        );
-        inviaNotificaManagers(
-            req.azienda_id,
-            "🤝 Scambio Turno da Approvare",
-            `${nomeSostituto} sostituirà ${turno.nome_proprietario || 'un collega'} il ${turno.giorno} (${turno.orario}).`
-        );
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1227,54 +975,16 @@ app.put('/api/turni/:id/approva-scambio', async (req, res) => {
             "UPDATE turni SET utente_id = sostituto_id, sostituto_id = NULL, stato = 'confermato' WHERE id = $1 AND azienda_id = $2",
             [req.params.id, req.azienda_id]
         );
-
-        inviaNotificaUtente(
-            t.utente_id,
-            req.azienda_id,
-            "✅ Scambio Turno Approvato",
-            `Il Titolare ha approvato lo scambio per il ${t.giorno} (${t.orario}). Non sei più in turno.`
-        );
-        inviaNotificaUtente(
-            t.sostituto_id,
-            req.azienda_id,
-            "✅ Scambio Turno Confermato",
-            `Il Titolare ha approvato lo scambio: sei assegnato al turno del ${t.giorno} (${t.orario}).`
-        );
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/turni/:id/rifiuta-scambio', async (req, res) => {
     try {
-        const turnoRes = await pool.query(
-            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
-            [req.params.id, req.azienda_id]
-        );
-        const t = turnoRes.rows[0];
-
         await pool.query(
             "UPDATE turni SET stato = 'confermato', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2",
             [req.params.id, req.azienda_id]
         );
-
-        if (t) {
-            inviaNotificaUtente(
-                t.utente_id,
-                req.azienda_id,
-                "❌ Scambio Turno Rifiutato",
-                `Il Titolare ha rifiutato lo scambio del ${t.giorno} (${t.orario}). Il turno resta assegnato a te.`
-            );
-            if (t.sostituto_id) {
-                inviaNotificaUtente(
-                    t.sostituto_id,
-                    req.azienda_id,
-                    "❌ Scambio Turno Rifiutato",
-                    `Il Titolare non ha approvato lo scambio per il ${t.giorno} (${t.orario}).`
-                );
-            }
-        }
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
