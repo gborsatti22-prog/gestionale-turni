@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Gestionale Turni</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerie per esportazione reale Excel (.xlsx) e PDF (.pdf) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <meta name="theme-color" content="#111827">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -133,18 +137,21 @@
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE / NOTTURNE / FESTIVE & EXPORT CSV -->
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE/NOTTURNE/FESTIVE ED EXPORT EXCEL/PDF -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
                     <div>
-                        <h3 class="text-xl font-bold text-gray-900">📊 Report e Resoconto Mensile Turni</h3>
-                        <p class="text-xs text-gray-500 mt-0.5">Suddivisione automatica ore ordinarie, notturne (22:00–06:00) e festive/domenicali</p>
+                        <h3 class="text-xl font-bold text-gray-900">📊 Report Mensile Ore & Export Consulente</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Suddivisione automatica: <strong>Ordinarie</strong>, <strong>Notturne</strong> (22:00–06:00) e <strong>Festive / Domenicali</strong>.</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                         <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
                         <input type="month" id="selettore-mese-stats" onchange="caricaStatisticheMensili()" class="border p-2 rounded-lg text-sm bg-gray-50 outline-none font-bold text-indigo-700">
-                        <button type="button" onclick="esportaReportCSV()" class="bg-emerald-600 hover:bg-emerald-700 transition text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-1.5">
-                            📥 Esporta CSV / Excel
+                        <button type="button" onclick="esportaStatisticheExcel()" class="bg-emerald-600 hover:bg-emerald-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm shadow-sm flex items-center gap-1.5">
+                            📗 Esporta Excel (.xlsx)
+                        </button>
+                        <button type="button" onclick="esportaStatistichePDF()" class="bg-rose-600 hover:bg-rose-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm shadow-sm flex items-center gap-1.5">
+                            📕 Esporta PDF
                         </button>
                     </div>
                 </div>
@@ -153,17 +160,16 @@
                         <thead>
                             <tr class="border-b bg-gray-100 text-gray-600 text-xs uppercase">
                                 <th class="p-3">Dipendente</th>
-                                <th class="p-3">Compiti / Reparti</th>
+                                <th class="p-3">Compiti</th>
                                 <th class="p-3 text-center">Turni</th>
                                 <th class="p-3 text-right">Ordinarie</th>
-                                <th class="p-3 text-right text-purple-700">Notturne</th>
-                                <th class="p-3 text-right text-amber-700">Festive</th>
-                                <th class="p-3 text-right text-rose-700">Nott. Festive</th>
-                                <th class="p-3 text-right text-indigo-700">Totale Ore</th>
+                                <th class="p-3 text-right text-indigo-700">Notturne</th>
+                                <th class="p-3 text-right text-amber-700">Festive/Dom.</th>
+                                <th class="p-3 text-right text-purple-700">Nott. Festive</th>
+                                <th class="p-3 text-right font-bold text-gray-900">Totale Ore</th>
                             </tr>
                         </thead>
                         <tbody id="tabella-statistiche"></tbody>
-                        <tfoot id="footer-statistiche"></tfoot>
                     </table>
                 </div>
             </div>
@@ -298,6 +304,7 @@
         let aziendaCorrenteId = null; 
         let superadminToken = null;
         let listaAziendeSA = {};
+        let nomeAttivitaCorrente = 'Gestionale Turni';
         
         let listaUtentiGlobal = [];
         let listaVeicoliGlobal = [];
@@ -305,6 +312,7 @@
         let turniGlobal = [];
         let vistaAttuale = 'lista';
         let utenteInModificaCompitiId = null;
+        let ultimeStatisticheMensili = { mese: '', riepilogo: [], dettaglio_turni: [] };
 
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
@@ -338,6 +346,7 @@
             return fetch(url, options);
         }
 
+        // Gestore centralizzato per salvataggi/modifiche turno con controllo conflitti e riposo 11h CCNL
         async function inviaRichiestaTurnoConControlli(url, method, payload, onSuccess) {
             const res = await apiFetch(url, {
                 method,
@@ -388,6 +397,7 @@
                             const loginSelect = document.getElementById('login-select');
                             loginSelect.innerHTML = `<option value="superadmin">👑 Super Admin</option>`;
                         } else {
+                            nomeAttivitaCorrente = data.azienda.nome_locale;
                             document.getElementById('header-business').innerHTML = `${data.azienda.nome_locale} 🍔🛵`;
                             caricaImpostazioni();
                             caricaReparti().then(() => caricaUtenti());
@@ -616,6 +626,7 @@
                     if (data.success) {
                         aziendaCorrenteId = data.azienda.id;
                         utenteLoggato = data.utente;
+                        nomeAttivitaCorrente = data.azienda.nome_locale;
                         caricaImpostazioni();
                         attivaVistaAzienda('manager');
                     } else {
@@ -636,7 +647,8 @@
         // --- CARICAMENTO DATI ATTIVITÀ ---
         function caricaImpostazioni() {
             return apiFetch('/api/impostazioni').then(res => res.json()).then(data => {
-                const titolo = `${data.nome_business || 'Gestionale Turni'} ${data.emoji_business || ''}`;
+                nomeAttivitaCorrente = data.nome_business || nomeAttivitaCorrente || 'Gestionale Turni';
+                const titolo = `${nomeAttivitaCorrente} ${data.emoji_business || ''}`;
                 document.getElementById('header-business').textContent = titolo;
                 document.getElementById('page-title').textContent = titolo;
                 document.getElementById('set-nome-business').value = data.nome_business || '';
@@ -821,83 +833,283 @@
             if (!mese) return;
             apiFetch(`/api/statistiche/mensili?mese=${mese}`)
                 .then(res => res.json())
-                .then(stats => {
-                    const tbody = document.getElementById('tabella-statistiche');
-                    const tfoot = document.getElementById('footer-statistiche');
-                    tbody.innerHTML = '';
-                    tfoot.innerHTML = '';
+                .then(data => {
+                    const stats = Array.isArray(data) ? data : (data.riepilogo || []);
+                    ultimeStatisticheMensili = {
+                        mese,
+                        riepilogo: stats,
+                        dettaglio_turni: Array.isArray(data.dettaglio_turni) ? data.dettaglio_turni : []
+                    };
 
-                    if (!Array.isArray(stats) || stats.length === 0) {
+                    const tbody = document.getElementById('tabella-statistiche');
+                    tbody.innerHTML = '';
+                    if (stats.length === 0) {
                         tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
                         return;
                     }
-
-                    let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totGen = 0;
-
                     stats.forEach(s => {
-                        const ord = Number(s.ore_ordinarie || 0);
-                        const nott = Number(s.ore_notturne || 0);
-                        const fest = Number(s.ore_festive || 0);
-                        const nottFest = Number(s.ore_notturne_festive || 0);
-                        const tot = Number(s.totale_ore || 0);
-
-                        totTurni += Number(s.totale_turni || 0);
-                        totOrd += ord;
-                        totNott += nott;
-                        totFest += fest;
-                        totNottFest += nottFest;
-                        totGen += tot;
+                        const ord = Number(s.ore_ordinarie || 0).toFixed(2);
+                        const nott = Number(s.ore_notturne || 0).toFixed(2);
+                        const fest = Number(s.ore_festive || 0).toFixed(2);
+                        const nottFest = Number(s.ore_notturne_festive || 0).toFixed(2);
+                        const tot = Number(s.totale_ore || 0).toFixed(2);
 
                         tbody.innerHTML += `
                             <tr class="border-b hover:bg-gray-50">
                                 <td class="p-3 font-bold text-gray-900">${s.nome}</td>
-                                <td class="p-3 text-gray-600">${s.reparto || '-'}</td>
+                                <td class="p-3 text-xs text-gray-600">${s.reparto || '-'}</td>
                                 <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
-                                <td class="p-3 text-right font-medium text-gray-700">${ord.toFixed(1)} h</td>
-                                <td class="p-3 text-right font-semibold text-purple-700">${nott.toFixed(1)} h</td>
-                                <td class="p-3 text-right font-semibold text-amber-700">${fest.toFixed(1)} h</td>
-                                <td class="p-3 text-right font-semibold text-rose-700">${nottFest.toFixed(1)} h</td>
-                                <td class="p-3 text-right text-indigo-700 font-bold">${tot.toFixed(1)} h</td>
+                                <td class="p-3 text-right">${ord} h</td>
+                                <td class="p-3 text-right text-indigo-700 font-semibold">${nott} h</td>
+                                <td class="p-3 text-right text-amber-700 font-semibold">${fest} h</td>
+                                <td class="p-3 text-right text-purple-700 font-semibold">${nottFest} h</td>
+                                <td class="p-3 text-right text-gray-900 font-extrabold">${tot} h</td>
                             </tr>
                         `;
                     });
-
-                    tfoot.innerHTML = `
-                        <tr class="bg-indigo-50/70 border-t-2 border-indigo-200 font-bold text-gray-900">
-                            <td class="p-3" colspan="2">TOTALE LOCALE</td>
-                            <td class="p-3 text-center">${totTurni}</td>
-                            <td class="p-3 text-right">${totOrd.toFixed(1)} h</td>
-                            <td class="p-3 text-right text-purple-700">${totNott.toFixed(1)} h</td>
-                            <td class="p-3 text-right text-amber-700">${totFest.toFixed(1)} h</td>
-                            <td class="p-3 text-right text-rose-700">${totNottFest.toFixed(1)} h</td>
-                            <td class="p-3 text-right text-indigo-700">${totGen.toFixed(1)} h</td>
-                        </tr>
-                    `;
                 })
                 .catch(err => console.error("Errore caricamento statistiche:", err));
         }
 
-        window.esportaReportCSV = async function() {
-            const mese = document.getElementById('selettore-mese-stats').value;
-            if (!mese) return alert("Seleziona prima un mese da esportare.");
-
-            try {
-                const res = await apiFetch(`/api/statistiche/mensili/csv?mese=${encodeURIComponent(mese)}`);
-                if (!res.ok) {
-                    return alert("Errore durante la generazione del file CSV.");
-                }
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Report_Ore_${mese}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-            } catch (err) {
-                alert("Impossibile scaricare il file CSV. Verifica la connessione.");
+        // --- ESPORTAZIONE EXCEL (.XLSX) ---
+        window.esportaStatisticheExcel = function() {
+            if (!window.XLSX) {
+                return alert("Libreria Excel non ancora caricata, riprova tra un istante.");
             }
+            const stats = ultimeStatisticheMensili.riepilogo || [];
+            const dettaglio = ultimeStatisticheMensili.dettaglio_turni || [];
+            const mese = ultimeStatisticheMensili.mese || document.getElementById('selettore-mese-stats').value;
+
+            if (stats.length === 0) {
+                return alert("Nessun dato disponibile da esportare per il mese selezionato.");
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            // Foglio 1: Riepilogo Mensile
+            const righeRiepilogo = [
+                [`PROSPETTO ORE LAVORATE - ${nomeAttivitaCorrente.toUpperCase()}`],
+                [`Mese di riferimento: ${mese}`, '', 'Fascia notturna: 22:00 - 06:00 | Festive: Domeniche e festività nazionali'],
+                [],
+                ['Dipendente', 'Compiti / Reparti', 'Totale Turni', 'Ore Ordinarie', 'Ore Notturne', 'Ore Festive/Dom.', 'Ore Nott. Festive', 'Totale Ore']
+            ];
+
+            let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
+
+            stats.forEach(s => {
+                const ord = Number(s.ore_ordinarie || 0);
+                const nott = Number(s.ore_notturne || 0);
+                const fest = Number(s.ore_festive || 0);
+                const nottFest = Number(s.ore_notturne_festive || 0);
+                const tot = Number(s.totale_ore || 0);
+
+                totTurni += Number(s.totale_turni || 0);
+                totOrd += ord;
+                totNott += nott;
+                totFest += fest;
+                totNottFest += nottFest;
+                totOre += tot;
+
+                righeRiepilogo.push([
+                    s.nome,
+                    s.reparto || '-',
+                    Number(s.totale_turni || 0),
+                    Number(ord.toFixed(2)),
+                    Number(nott.toFixed(2)),
+                    Number(fest.toFixed(2)),
+                    Number(nottFest.toFixed(2)),
+                    Number(tot.toFixed(2))
+                ]);
+            });
+
+            righeRiepilogo.push([
+                'TOTALE COMPLESSIVO',
+                '',
+                totTurni,
+                Number(totOrd.toFixed(2)),
+                Number(totNott.toFixed(2)),
+                Number(totFest.toFixed(2)),
+                Number(totNottFest.toFixed(2)),
+                Number(totOre.toFixed(2))
+            ]);
+
+            const wsRiepilogo = XLSX.utils.aoa_to_sheet(righeRiepilogo);
+            wsRiepilogo['!cols'] = [
+                { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 14 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsRiepilogo, 'Riepilogo Mensile');
+
+            // Foglio 2: Dettaglio Giornaliero Turni
+            const righeDettaglio = [
+                [`DETTAGLIO TURNI DEL MESE (${mese}) - ${nomeAttivitaCorrente.toUpperCase()}`],
+                [],
+                ['Data', 'Dipendente', 'Reparto / Compito', 'Orario', 'Mezzo', 'Ordinarie (h)', 'Notturne (h)', 'Festive (h)', 'Nott. Festive (h)', 'Totale (h)']
+            ];
+
+            dettaglio.forEach(d => {
+                righeDettaglio.push([
+                    d.giorno,
+                    d.dipendente,
+                    d.reparto,
+                    d.orario,
+                    d.mezzo,
+                    Number(Number(d.ore_ordinarie || 0).toFixed(2)),
+                    Number(Number(d.ore_notturne || 0).toFixed(2)),
+                    Number(Number(d.ore_festive || 0).toFixed(2)),
+                    Number(Number(d.ore_notturne_festive || 0).toFixed(2)),
+                    Number(Number(d.totale_ore || 0).toFixed(2))
+                ]);
+            });
+
+            const wsDettaglio = XLSX.utils.aoa_to_sheet(righeDettaglio);
+            wsDettaglio['!cols'] = [
+                { wch: 13 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 13 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsDettaglio, 'Dettaglio Turni');
+
+            const nomeFileSafe = nomeAttivitaCorrente.replace(/[^a-zA-Z0-9_-]/g, '_');
+            XLSX.writeFile(wb, `Report_Ore_${nomeFileSafe}_${mese}.xlsx`);
+        };
+
+        // --- ESPORTAZIONE PDF (.PDF) ---
+        window.esportaStatistichePDF = function() {
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                return alert("Libreria PDF non ancora caricata, riprova tra un istante.");
+            }
+            const stats = ultimeStatisticheMensili.riepilogo || [];
+            const dettaglio = ultimeStatisticheMensili.dettaglio_turni || [];
+            const mese = ultimeStatisticheMensili.mese || document.getElementById('selettore-mese-stats').value;
+
+            if (stats.length === 0) {
+                return alert("Nessun dato disponibile da esportare per il mese selezionato.");
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+            // Intestazione scura
+            doc.setFillColor(17, 24, 39);
+            doc.rect(0, 0, 297, 26, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${nomeAttivitaCorrente} — Prospetto Mensile Ore Lavorate`, 14, 12);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Mese di riferimento: ${mese}   |   Documento per Consulente del Lavoro`, 14, 19);
+
+            // Tabella Riepilogo
+            let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
+            const bodyRiepilogo = stats.map(s => {
+                const ord = Number(s.ore_ordinarie || 0);
+                const nott = Number(s.ore_notturne || 0);
+                const fest = Number(s.ore_festive || 0);
+                const nottFest = Number(s.ore_notturne_festive || 0);
+                const tot = Number(s.totale_ore || 0);
+
+                totTurni += Number(s.totale_turni || 0);
+                totOrd += ord;
+                totNott += nott;
+                totFest += fest;
+                totNottFest += nottFest;
+                totOre += tot;
+
+                return [
+                    s.nome,
+                    s.reparto || '-',
+                    String(s.totale_turni || 0),
+                    `${ord.toFixed(2)} h`,
+                    `${nott.toFixed(2)} h`,
+                    `${fest.toFixed(2)} h`,
+                    `${nottFest.toFixed(2)} h`,
+                    `${tot.toFixed(2)} h`
+                ];
+            });
+
+            doc.autoTable({
+                startY: 32,
+                head: [['Dipendente', 'Compiti / Reparti', 'Turni', 'Ordinarie', 'Notturne (22-06)', 'Festive / Dom.', 'Nott. Festive', 'Totale Ore']],
+                body: bodyRiepilogo,
+                foot: [[
+                    'TOTALE COMPLESSIVO',
+                    '',
+                    String(totTurni),
+                    `${totOrd.toFixed(2)} h`,
+                    `${totNott.toFixed(2)} h`,
+                    `${totFest.toFixed(2)} h`,
+                    `${totNottFest.toFixed(2)} h`,
+                    `${totOre.toFixed(2)} h`
+                ]],
+                theme: 'grid',
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+                footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold', fontSize: 9 },
+                styles: { fontSize: 9, cellPadding: 3 },
+                columnStyles: {
+                    2: { halign: 'center' },
+                    3: { halign: 'right' },
+                    4: { halign: 'right' },
+                    5: { halign: 'right' },
+                    6: { halign: 'right' },
+                    7: { halign: 'right', fontStyle: 'bold' }
+                }
+            });
+
+            const afterTableY = doc.lastAutoTable.finalY + 8;
+            doc.setTextColor(90, 90, 90);
+            doc.setFontSize(8.5);
+            doc.text('Criteri di calcolo: Ore Notturne = fascia 22:00 - 06:00 | Ore Festive = Domeniche e festività nazionali italiane.', 14, afterTableY);
+
+            // Spazio firma
+            const oggiFormat = new Date().toLocaleDateString('it-IT');
+            doc.setTextColor(30, 30, 30);
+            doc.setFontSize(9.5);
+            doc.text(`Data generazione: ${oggiFormat}`, 14, afterTableY + 12);
+            doc.text('Timbro e Firma Titolare: __________________________________________', 165, afterTableY + 12);
+
+            // Pagina 2: Dettaglio turni del mese
+            if (dettaglio.length > 0) {
+                doc.addPage();
+                doc.setFillColor(17, 24, 39);
+                doc.rect(0, 0, 297, 20, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(13);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`${nomeAttivitaCorrente} — Dettaglio Giornaliero Turni (${mese})`, 14, 13);
+
+                const bodyDettaglio = dettaglio.map(d => [
+                    d.giorno,
+                    d.dipendente,
+                    d.reparto,
+                    d.orario,
+                    d.mezzo,
+                    `${Number(d.ore_ordinarie || 0).toFixed(2)} h`,
+                    `${Number(d.ore_notturne || 0).toFixed(2)} h`,
+                    `${Number(d.ore_festive || 0).toFixed(2)} h`,
+                    `${Number(d.ore_notturne_festive || 0).toFixed(2)} h`,
+                    `${Number(d.totale_ore || 0).toFixed(2)} h`
+                ]);
+
+                doc.autoTable({
+                    startY: 26,
+                    head: [['Data', 'Dipendente', 'Reparto', 'Orario', 'Mezzo', 'Ordinarie', 'Notturne', 'Festive', 'Nott. Fest.', 'Totale']],
+                    body: bodyDettaglio,
+                    theme: 'striped',
+                    headStyles: { fillColor: [55, 65, 81], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+                    styles: { fontSize: 8.5, cellPadding: 2.5 },
+                    columnStyles: {
+                        5: { halign: 'right' },
+                        6: { halign: 'right' },
+                        7: { halign: 'right' },
+                        8: { halign: 'right' },
+                        9: { halign: 'right', fontStyle: 'bold' }
+                    }
+                });
+            }
+
+            const nomeFileSafe = nomeAttivitaCorrente.replace(/[^a-zA-Z0-9_-]/g, '_');
+            doc.save(`Report_Ore_${nomeFileSafe}_${mese}.pdf`);
         };
 
         // --- SALVATAGGIO DATI ---

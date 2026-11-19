@@ -102,6 +102,8 @@ function parseIntervalloMinuti(giornoStr, orarioStr) {
     }
 
     return {
+        minInizio,
+        minFine,
         startEpochMin: baseDayMin + minInizio,
         endEpochMin: baseDayMin + minFine,
         durationHours: (minFine - minInizio) / 60
@@ -114,11 +116,8 @@ function spostaGiornoStr(giornoStr, deltaGiorni) {
     return d.toISOString().split('T')[0];
 }
 
-// --- HELPER CALCOLO FESTIVITÀ ITALIANE & ORE (ORDINARIE / NOTTURNE / FESTIVE) ---
-const cachePasquetta = {};
-
-function getPasquettaUTC(anno) {
-    if (cachePasquetta[anno]) return cachePasquetta[anno];
+// --- HELPER FESTIVITÀ ITALIANE & CALCOLO ORE ORDINARIE / NOTTURNE / FESTIVE ---
+function calcolaPasquaUTC(anno) {
     const a = anno % 19;
     const b = Math.floor(anno / 100);
     const c = anno % 100;
@@ -131,49 +130,52 @@ function getPasquettaUTC(anno) {
     const k = c % 4;
     const l = (32 + 2 * e + 2 * i - h - k) % 7;
     const m = Math.floor((a + 11 * h + 22 * l) / 451);
-    const mesePasqua = Math.floor((h + l - 7 * m + 114) / 31); // 3 = Marzo, 4 = Aprile
-    const giornoPasqua = ((h + l - 7 * m + 114) % 31) + 1;
-
-    const pasquetta = new Date(Date.UTC(anno, mesePasqua - 1, giornoPasqua + 1));
-    const mm = String(pasquetta.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(pasquetta.getUTCDate()).padStart(2, '0');
-    cachePasquetta[anno] = `${mm}-${dd}`;
-    return cachePasquetta[anno];
+    const mese = Math.floor((h + l - 7 * m + 114) / 31);
+    const giorno = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(Date.UTC(anno, mese - 1, giorno));
 }
 
-const FESTIVI_FISSI_IT = new Set([
-    '01-01', // Capodanno
-    '01-06', // Epifania
-    '04-25', // Festa della Liberazione
-    '05-01', // Festa dei Lavoratori
-    '06-02', // Festa della Repubblica
-    '08-15', // Ferragosto
-    '11-01', // Ognissanti
-    '12-08', // Immacolata Concezione
-    '12-25', // Natale
-    '12-26'  // Santo Stefano
-]);
+function isGiornoFestivoItalia(giornoStr) {
+    const [anno, mese, day] = giornoStr.split('-').map(Number);
+    const dataUTC = new Date(Date.UTC(anno, mese - 1, day));
 
-function isGiornoFestivoUTC(dateObj) {
-    if (dateObj.getUTCDay() === 0) return true; // Domenica
-    const anno = dateObj.getUTCFullYear();
-    const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getUTCDate()).padStart(2, '0');
-    const mmdd = `${mm}-${dd}`;
-    if (FESTIVI_FISSI_IT.has(mmdd)) return true;
-    if (mmdd === getPasquettaUTC(anno)) return true;
-    return false;
+    // Domenica
+    if (dataUTC.getUTCDay() === 0) return true;
+
+    // Festività nazionali fisse
+    const mmdd = `${String(mese).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const festiviFissi = [
+        '01-01', // Capodanno
+        '01-06', // Epifania
+        '04-25', // Liberazione
+        '05-01', // Festa dei Lavoratori
+        '06-02', // Festa della Repubblica
+        '08-15', // Ferragosto
+        '11-01', // Ognissanti
+        '12-08', // Immacolata Concezione
+        '12-25', // Natale
+        '12-26'  // Santo Stefano
+    ];
+    if (festiviFissi.includes(mmdd)) return true;
+
+    // Pasqua e Lunedì dell'Angelo (Pasquetta)
+    const pasqua = calcolaPasquaUTC(anno);
+    const pasquetta = new Date(pasqua.getTime() + 24 * 60 * 60 * 1000);
+    const pasquaStr = pasqua.toISOString().split('T')[0];
+    const pasquettaStr = pasquetta.toISOString().split('T')[0];
+
+    return giornoStr === pasquaStr || giornoStr === pasquettaStr;
 }
 
-function analizzaOreTurno(giornoStr, orarioStr) {
+function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
     const intervallo = parseIntervalloMinuti(giornoStr, orarioStr);
     if (!intervallo) {
         return {
-            totale_ore: 0,
             ore_ordinarie: 0,
             ore_notturne: 0,
             ore_festive: 0,
-            ore_notturne_festive: 0
+            ore_notturne_festive: 0,
+            totale_ore: 0
         };
     }
 
@@ -182,30 +184,29 @@ function analizzaOreTurno(giornoStr, orarioStr) {
     let minFestive = 0;
     let minNotturneFestive = 0;
 
-    for (let m = intervallo.startEpochMin; m < intervallo.endEpochMin; m++) {
-        const d = new Date(m * 60000);
-        const ora = d.getUTCHours();
-        const isNotturno = (ora >= 22 || ora < 6);
-        const isFestivo = isGiornoFestivoUTC(d);
+    for (let m = intervallo.minInizio; m < intervallo.minFine; m++) {
+        const dayOffset = Math.floor(m / 1440);
+        const mod = m % 1440;
+        const dataCorrente = dayOffset === 0 ? giornoStr : spostaGiornoStr(giornoStr, dayOffset);
 
-        if (isNotturno && isFestivo) {
-            minNotturneFestive++;
-        } else if (isNotturno) {
-            minNotturne++;
-        } else if (isFestivo) {
-            minFestive++;
-        } else {
-            minOrdinarie++;
-        }
+        // Fascia notturna CCNL: 22:00 - 06:00
+        const isNotturno = (mod >= 22 * 60 || mod < 6 * 60);
+        const isFestivo = isGiornoFestivoItalia(dataCorrente);
+
+        if (!isNotturno && !isFestivo) minOrdinarie++;
+        else if (isNotturno && !isFestivo) minNotturne++;
+        else if (!isNotturno && isFestivo) minFestive++;
+        else minNotturneFestive++;
     }
 
-    const totaleMin = minOrdinarie + minNotturne + minFestive + minNotturneFestive;
+    const round2 = (n) => Math.round((n / 60) * 100) / 100;
+
     return {
-        totale_ore: totaleMin / 60,
-        ore_ordinarie: minOrdinarie / 60,
-        ore_notturne: minNotturne / 60,
-        ore_festive: minFestive / 60,
-        ore_notturne_festive: minNotturneFestive / 60
+        ore_ordinarie: round2(minOrdinarie),
+        ore_notturne: round2(minNotturne),
+        ore_festive: round2(minFestive),
+        ore_notturne_festive: round2(minNotturneFestive),
+        totale_ore: round2(intervallo.minFine - intervallo.minInizio)
     };
 }
 
@@ -988,195 +989,86 @@ app.put('/api/turni/:id/rifiuta-scambio', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- STATISTICHE MENSILI CON SUDDIVISIONE ORE (ORDINARIE / NOTTURNE / FESTIVE) ---
-async function calcolaDatiStatisticheMensili(aziendaId, mese) {
-    const query = `
-        SELECT u.id, u.nome, u.reparto, t.id AS turno_id, t.giorno, t.orario, t.reparto AS turno_reparto, v.nome AS nome_veicolo
-        FROM utenti u
-        LEFT JOIN turni t ON u.id = t.utente_id 
-            AND t.giorno LIKE $1
-            AND t.stato IN ('confermato', 'assegnato', 'scambio', 'scambio_proposto')
-            AND t.azienda_id = $2
-        LEFT JOIN veicoli v ON t.veicolo_id = v.id
-        WHERE u.ruolo != 'manager' AND u.azienda_id = $2
-        ORDER BY u.nome ASC, t.giorno ASC, t.orario ASC
-    `;
-    const result = await pool.query(query, [`${mese}-%`, Number(aziendaId)]);
-
-    const statistiche = {};
-    const dettaglioTurni = [];
-
-    result.rows.forEach(row => {
-        if (!statistiche[row.id]) {
-            statistiche[row.id] = {
-                id: row.id,
-                nome: row.nome,
-                reparto: row.reparto,
-                totale_turni: 0,
-                totale_ore: 0,
-                ore_ordinarie: 0,
-                ore_notturne: 0,
-                ore_festive: 0,
-                ore_notturne_festive: 0
-            };
-        }
-
-        if (row.turno_id && row.orario) {
-            const breakdown = analizzaOreTurno(row.giorno, row.orario);
-            statistiche[row.id].totale_turni += 1;
-            statistiche[row.id].totale_ore += breakdown.totale_ore;
-            statistiche[row.id].ore_ordinarie += breakdown.ore_ordinarie;
-            statistiche[row.id].ore_notturne += breakdown.ore_notturne;
-            statistiche[row.id].ore_festive += breakdown.ore_festive;
-            statistiche[row.id].ore_notturne_festive += breakdown.ore_notturne_festive;
-
-            dettaglioTurni.push({
-                giorno: row.giorno,
-                dipendente: row.nome,
-                reparto: row.turno_reparto || row.reparto || '-',
-                orario: row.orario,
-                veicolo: row.nome_veicolo || '-',
-                ...breakdown
-            });
-        }
-    });
-
-    const riepilogo = Object.values(statistiche).sort((a, b) => b.totale_ore - a.totale_ore || b.totale_turni - a.totale_turni);
-    dettaglioTurni.sort((a, b) => a.giorno.localeCompare(b.giorno) || a.dipendente.localeCompare(b.dipendente));
-
-    return { riepilogo, dettaglioTurni };
-}
-
+// --- STATISTICHE MENSILI CON ORE ORDINARIE / NOTTURNE / FESTIVE ---
 app.get('/api/statistiche/mensili', async (req, res) => {
     try {
         const mese = req.query.mese;
-        if (!mese) return res.json([]);
-        const { riepilogo } = await calcolaDatiStatisticheMensili(req.azienda_id, mese);
-        res.json(riepilogo);
+        if (!mese) return res.json({ mese: '', riepilogo: [], dettaglio_turni: [] });
+
+        const query = `
+            SELECT 
+                u.id, 
+                u.nome, 
+                u.reparto, 
+                t.id AS turno_id,
+                t.giorno,
+                t.orario,
+                t.reparto AS reparto_turno,
+                v.nome AS nome_veicolo
+            FROM utenti u
+            LEFT JOIN turni t ON u.id = t.utente_id 
+                AND t.giorno LIKE $1
+                AND t.stato IN ('confermato', 'assegnato', 'scambio', 'scambio_proposto')
+                AND t.azienda_id = $2
+            LEFT JOIN veicoli v ON t.veicolo_id = v.id
+            WHERE u.ruolo != 'manager' AND u.azienda_id = $2
+            ORDER BY u.id ASC, t.giorno ASC, t.orario ASC
+        `;
+        const result = await pool.query(query, [`${mese}-%`, Number(req.azienda_id)]);
+        
+        const statistiche = {};
+        const dettaglioTurni = [];
+        const round2 = (n) => Math.round(n * 100) / 100;
+
+        result.rows.forEach(row => {
+            if (!statistiche[row.id]) {
+                statistiche[row.id] = {
+                    id: row.id,
+                    nome: row.nome,
+                    reparto: row.reparto,
+                    totale_turni: 0,
+                    ore_ordinarie: 0,
+                    ore_notturne: 0,
+                    ore_festive: 0,
+                    ore_notturne_festive: 0,
+                    totale_ore: 0
+                };
+            }
+            if (row.orario && row.giorno) {
+                const dett = calcolaDettaglioOreTurno(row.giorno, row.orario);
+                statistiche[row.id].totale_turni += 1;
+                statistiche[row.id].ore_ordinarie = round2(statistiche[row.id].ore_ordinarie + dett.ore_ordinarie);
+                statistiche[row.id].ore_notturne = round2(statistiche[row.id].ore_notturne + dett.ore_notturne);
+                statistiche[row.id].ore_festive = round2(statistiche[row.id].ore_festive + dett.ore_festive);
+                statistiche[row.id].ore_notturne_festive = round2(statistiche[row.id].ore_notturne_festive + dett.ore_notturne_festive);
+                statistiche[row.id].totale_ore = round2(statistiche[row.id].totale_ore + dett.totale_ore);
+
+                dettaglioTurni.push({
+                    giorno: row.giorno,
+                    dipendente: row.nome,
+                    reparto: row.reparto_turno || row.reparto || '-',
+                    orario: row.orario,
+                    mezzo: row.nome_veicolo || '-',
+                    ore_ordinarie: dett.ore_ordinarie,
+                    ore_notturne: dett.ore_notturne,
+                    ore_festive: dett.ore_festive,
+                    ore_notturne_festive: dett.ore_notturne_festive,
+                    totale_ore: dett.totale_ore
+                });
+            }
+        });
+
+        dettaglioTurni.sort((a, b) => a.giorno.localeCompare(b.giorno) || a.dipendente.localeCompare(b.dipendente));
+        const statsArray = Object.values(statistiche).sort((a, b) => b.totale_ore - a.totale_ore || b.totale_turni - a.totale_turni);
+
+        res.json({
+            mese,
+            riepilogo: statsArray,
+            dettaglio_turni: dettaglioTurni
+        });
     } catch (err) { 
         console.error("Errore statistiche:", err.message);
         res.status(500).json({ error: err.message }); 
-    }
-});
-
-// EXPORT CSV PER CONSULENTE DEL LAVORO (FORMATO EXCEL ITALIANO)
-function csvCell(val) {
-    const str = val === null || val === undefined ? '' : String(val);
-    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-}
-
-function fmtNumIT(num) {
-    return Number(num || 0).toFixed(2).replace('.', ',');
-}
-
-app.get('/api/statistiche/mensili/csv', async (req, res) => {
-    try {
-        const mese = req.query.mese;
-        if (!mese) return res.status(400).send("Parametro mese mancante.");
-
-        const impRes = await pool.query("SELECT nome_business FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [req.azienda_id]);
-        const nomeAttivita = (impRes.rows[0] && impRes.rows[0].nome_business) ? impRes.rows[0].nome_business : `Locale_${req.azienda_id}`;
-
-        const { riepilogo, dettaglioTurni } = await calcolaDatiStatisticheMensili(req.azienda_id, mese);
-
-        const nomiGiorni = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-        const righe = [];
-
-        righe.push(`RIEPILOGO PRESENZE E ORE - ${csvCell(nomeAttivita)} - MESE ${csvCell(mese)}`);
-        righe.push('');
-        righe.push([
-            'Dipendente',
-            'Compiti / Reparti',
-            'Turni Totali',
-            'Ore Ordinarie (06-22 Feriali)',
-            'Ore Notturne (22-06 Feriali)',
-            'Ore Festive / Domenicali (06-22)',
-            'Ore Notturne Festive (22-06)',
-            'Totale Ore Lavorate'
-        ].map(csvCell).join(';'));
-
-        let sumTurni = 0, sumOrd = 0, sumNott = 0, sumFest = 0, sumNottFest = 0, sumTot = 0;
-
-        riepilogo.forEach(s => {
-            sumTurni += s.totale_turni;
-            sumOrd += s.ore_ordinarie;
-            sumNott += s.ore_notturne;
-            sumFest += s.ore_festive;
-            sumNottFest += s.ore_notturne_festive;
-            sumTot += s.totale_ore;
-
-            righe.push([
-                s.nome,
-                s.reparto || '-',
-                s.totale_turni,
-                fmtNumIT(s.ore_ordinarie),
-                fmtNumIT(s.ore_notturne),
-                fmtNumIT(s.ore_festive),
-                fmtNumIT(s.ore_notturne_festive),
-                fmtNumIT(s.totale_ore)
-            ].map(csvCell).join(';'));
-        });
-
-        righe.push([
-            'TOTALE GENERALE',
-            '',
-            sumTurni,
-            fmtNumIT(sumOrd),
-            fmtNumIT(sumNott),
-            fmtNumIT(sumFest),
-            fmtNumIT(sumNottFest),
-            fmtNumIT(sumTot)
-        ].map(csvCell).join(';'));
-
-        righe.push('');
-        righe.push('');
-        righe.push('DETTAGLIO ANALITICO TURNI DEL MESE');
-        righe.push([
-            'Data',
-            'Giorno',
-            'Dipendente',
-            'Compito / Reparto',
-            'Orario Turno',
-            'Mezzo',
-            'Ore Ordinarie',
-            'Ore Notturne',
-            'Ore Festive',
-            'Ore Notturne Festive',
-            'Totale Ore'
-        ].map(csvCell).join(';'));
-
-        dettaglioTurni.forEach(t => {
-            const [y, m, d] = t.giorno.split('-').map(Number);
-            const dt = new Date(Date.UTC(y, m - 1, d));
-            const nomeGiorno = nomiGiorni[dt.getUTCDay()] || '';
-
-            righe.push([
-                t.giorno,
-                nomeGiorno,
-                t.dipendente,
-                t.reparto,
-                t.orario,
-                t.veicolo,
-                fmtNumIT(t.ore_ordinarie),
-                fmtNumIT(t.ore_notturne),
-                fmtNumIT(t.ore_festive),
-                fmtNumIT(t.ore_notturne_festive),
-                fmtNumIT(t.totale_ore)
-            ].map(csvCell).join(';'));
-        });
-
-        const csvContent = '\uFEFF' + righe.join('\r\n');
-        const safeFileName = `Report_Ore_${nomeAttivita.replace(/[^a-zA-Z0-9_-]/g, '_')}_${mese}.csv`;
-
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        res.send(csvContent);
-    } catch (err) {
-        console.error("Errore export CSV:", err.message);
-        res.status(500).json({ error: err.message });
     }
 });
 
