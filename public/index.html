@@ -104,7 +104,10 @@
             
             <!-- SCHEDA 1: CREA E PROGRAMMA TURNO -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
-                <h3 class="text-xl font-bold mb-4 flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <h3 class="text-xl font-bold flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
+                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">🛡️ Controllo conflitti, mezzi & riposo 11h CCNL attivo</span>
+                </div>
                 <form id="form-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
                     <input type="text" id="orario" placeholder="es. 18:00 - 23:00" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
@@ -324,6 +327,37 @@
                 options.headers['x-superadmin-token'] = superadminToken;
             }
             return fetch(url, options);
+        }
+
+        // Gestore centralizzato per salvataggi/modifiche turno con controllo conflitti e riposo 11h CCNL
+        async function inviaRichiestaTurnoConControlli(url, method, payload, onSuccess) {
+            const res = await apiFetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                if (onSuccess) onSuccess(data);
+                return true;
+            }
+
+            if (data.richiedeConfermaRiposo && Array.isArray(data.warnings)) {
+                const msg = `⚠️ AVVISO RIPOSO MINIMO CCNL (< 11 ORE):\n\n${data.warnings.join('\n')}\n\nVuoi procedere comunque?`;
+                if (confirm(msg)) {
+                    return inviaRichiestaTurnoConControlli(
+                        url,
+                        method,
+                        { ...payload, forza_riposo: true },
+                        onSuccess
+                    );
+                }
+                return false;
+            }
+
+            alert(data.message || "Operazione bloccata per conflitto turno.");
+            return false;
         }
 
         // --- GESTIONE LOGIN & LOGOUT ---
@@ -872,46 +906,48 @@
             const compiti = opt ? parseCompiti(opt.dataset.reparto) : [];
             const compitoScelto = document.getElementById('selettore-compito-turno').value || compiti[0] || '';
 
-            apiFetch('/api/turni', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    giorno: document.getElementById('giorno').value, 
-                    orario: document.getElementById('orario').value, 
-                    utente_id: s.value, 
+            inviaRichiestaTurnoConControlli(
+                '/api/turni',
+                'POST',
+                {
+                    giorno: document.getElementById('giorno').value,
+                    orario: document.getElementById('orario').value,
+                    utente_id: s.value,
                     reparto: compitoScelto,
-                    veicolo_id: document.getElementById('selettore-veicolo').value, 
-                    ricorrenza: document.getElementById('settimane-ricorrenza').value, 
-                    stato: 'confermato' 
-                }) 
-            }).then(() => { 
-                caricaTurni(); 
-                e.target.reset(); 
-                aggiornaCompitiTurno(); 
-            }); 
+                    veicolo_id: document.getElementById('selettore-veicolo').value,
+                    ricorrenza: document.getElementById('settimane-ricorrenza').value,
+                    stato: 'confermato'
+                },
+                () => {
+                    caricaTurni();
+                    e.target.reset();
+                    aggiornaCompitiTurno();
+                }
+            );
         });
 
         document.getElementById('form-proponi-turno').addEventListener('submit', e => { 
             e.preventDefault(); 
             const compiti = parseCompiti(utenteLoggato.reparto);
             const compitoScelto = document.getElementById('compito-proposta').value || compiti[0] || '';
-            apiFetch('/api/turni', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    giorno: document.getElementById('giorno-proposta').value, 
-                    orario: document.getElementById('orario-proposta').value, 
-                    utente_id: utenteLoggato.id, 
+            inviaRichiestaTurnoConControlli(
+                '/api/turni',
+                'POST',
+                {
+                    giorno: document.getElementById('giorno-proposta').value,
+                    orario: document.getElementById('orario-proposta').value,
+                    utente_id: utenteLoggato.id,
                     reparto: compitoScelto,
-                    ricorrenza: document.getElementById('settimane-ricorrenza-proposta').value, 
-                    stato: 'proposta' 
-                }) 
-            }).then(() => { 
-                caricaTurni(); 
-                alert("Proposta inviata!"); 
-                e.target.reset(); 
-                aggiornaCompitiPropostaStaff();
-            }); 
+                    ricorrenza: document.getElementById('settimane-ricorrenza-proposta').value,
+                    stato: 'proposta'
+                },
+                () => {
+                    caricaTurni();
+                    alert("Proposta inviata!");
+                    e.target.reset();
+                    aggiornaCompitiPropostaStaff();
+                }
+            );
         });
 
         document.getElementById('form-indisponibilita').addEventListener('submit', e => { 
@@ -1245,7 +1281,12 @@
 
         window.approvaScambio = function(id) {
             if (confirm("Confermare definitivamente lo scambio di turno tra i due dipendenti?")) {
-                apiFetch(`/api/turni/${id}/approva-scambio`, { method: 'PUT' }).then(() => caricaTurni());
+                inviaRichiestaTurnoConControlli(
+                    `/api/turni/${id}/approva-scambio`,
+                    'PUT',
+                    {},
+                    () => caricaTurni()
+                );
             }
         };
 
@@ -1258,18 +1299,22 @@
         window.modificaOrario = function(id, orarioAttuale) {
             const nuovoOrario = prompt("Inserisci il nuovo orario (es. 19:00 - 23:30):", orarioAttuale);
             if(nuovoOrario && nuovoOrario.trim() !== "" && nuovoOrario !== orarioAttuale) {
-                apiFetch(`/api/turni/${id}/orario`, { 
-                    method: 'PUT', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ orario: nuovoOrario }) 
-                }).then(() => {
-                    caricaTurni();
-                }).catch(e => alert("Impossibile modificare l'orario. Verifica il server."));
+                inviaRichiestaTurnoConControlli(
+                    `/api/turni/${id}/orario`,
+                    'PUT',
+                    { orario: nuovoOrario.trim() },
+                    () => caricaTurni()
+                );
             }
         };
 
         window.confermaTurno = function(id) {
-            apiFetch(`/api/turni/${id}/conferma`, { method: 'PUT' }).then(() => caricaTurni());
+            inviaRichiestaTurnoConControlli(
+                `/api/turni/${id}/conferma`,
+                'PUT',
+                {},
+                () => caricaTurni()
+            );
         };
 
         window.eliminaTurno = function(id) {

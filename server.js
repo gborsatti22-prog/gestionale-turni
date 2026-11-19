@@ -77,6 +77,172 @@ function parseCompitiList(repartoStr) {
         .filter(Boolean);
 }
 
+// --- HELPER CONTROLLO CONFLITTI E RIPOSO CCNL (11 ORE) ---
+function parseIntervalloMinuti(giornoStr, orarioStr) {
+    if (!giornoStr || !orarioStr) return null;
+    const dateParts = String(giornoStr).split('-').map(Number);
+    if (dateParts.length !== 3 || dateParts.some(isNaN)) return null;
+
+    const match = String(orarioStr).match(/(\d{1,2})(?:[:.](\d{2}))?\s*(?:-|–|—|\/|alle|a)\s*(\d{1,2})(?:[:.](\d{2}))?/i);
+    if (!match) return null;
+
+    const hInizio = parseInt(match[1], 10);
+    const mInizio = parseInt(match[2] || '0', 10);
+    const hFine = parseInt(match[3], 10);
+    const mFine = parseInt(match[4] || '0', 10);
+
+    if (isNaN(hInizio) || isNaN(hFine)) return null;
+
+    const baseDayMin = Math.floor(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]) / 60000);
+    const minInizio = hInizio * 60 + mInizio;
+    let minFine = hFine * 60 + mFine;
+
+    if (minFine <= minInizio) {
+        minFine += 24 * 60;
+    }
+
+    return {
+        startEpochMin: baseDayMin + minInizio,
+        endEpochMin: baseDayMin + minFine,
+        durationHours: (minFine - minInizio) / 60
+    };
+}
+
+function spostaGiornoStr(giornoStr, deltaGiorni) {
+    const [anno, mese, day] = giornoStr.split('-').map(Number);
+    const d = new Date(Date.UTC(anno, mese - 1, day + deltaGiorni));
+    return d.toISOString().split('T')[0];
+}
+
+async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = null) {
+    const statiAttivi = ['confermato', 'assegnato', 'scambio', 'scambio_proposto'];
+    const warningsRiposo = [];
+
+    // Nomi utenti e veicoli per messaggi chiari
+    const utentiRes = await pool.query("SELECT id, nome FROM utenti WHERE azienda_id = $1", [aziendaId]);
+    const mappaUtenti = {};
+    utentiRes.rows.forEach(u => { mappaUtenti[Number(u.id)] = u.nome; });
+
+    const veicoliRes = await pool.query("SELECT id, nome FROM veicoli WHERE azienda_id = $1", [aziendaId]);
+    const mappaVeicoli = {};
+    veicoliRes.rows.forEach(v => { mappaVeicoli[Number(v.id)] = v.nome; });
+
+    const tuttiTurniRes = await pool.query(
+        `SELECT t.*, u.nome AS nome_proprietario, v.nome AS nome_veicolo
+         FROM turni t
+         LEFT JOIN utenti u ON t.utente_id = u.id
+         LEFT JOIN veicoli v ON t.veicolo_id = v.id
+         WHERE t.azienda_id = $1`,
+        [aziendaId]
+    );
+
+    const turniEsistenti = tuttiTurniRes.rows.filter(t => excludeTurnoId === null || Number(t.id) !== Number(excludeTurnoId));
+
+    // Controlla anche eventuali conflitti interni tra i turni dello stesso batch ricorrente
+    const processatiNelBatch = [];
+
+    for (const cand of candidati) {
+        const uid = Number(cand.utente_id);
+        const vid = cand.veicolo_id ? Number(cand.veicolo_id) : null;
+        const nomeDip = mappaUtenti[uid] || 'Il dipendente';
+        const intervalloCand = parseIntervalloMinuti(cand.giorno, cand.orario);
+
+        // 1. Controllo assenza/indisponibilità nello stesso giorno
+        const assenza = turniEsistenti.find(
+            t => Number(t.utente_id) === uid && t.giorno === cand.giorno && t.stato === 'indisponibile'
+        );
+        if (assenza) {
+            return {
+                bloccato: true,
+                message: `❌ Impossibile assegnare il turno il ${cand.giorno}: ${nomeDip} ha segnalato un'assenza/indisponibilità (${assenza.orario || 'Non disponibile'}).`
+            };
+        }
+
+        const poolConfronto = [...turniEsistenti, ...processatiNelBatch];
+
+        for (const es of poolConfronto) {
+            if (!statiAttivi.includes(es.stato)) continue;
+            const intervalloEs = parseIntervalloMinuti(es.giorno, es.orario);
+
+            // 2. Controllo sovrapposizione oraria dello stesso dipendente
+            if (Number(es.utente_id) === uid) {
+                if (intervalloCand && intervalloEs) {
+                    const siSovrappongono =
+                        intervalloCand.startEpochMin < intervalloEs.endEpochMin &&
+                        intervalloEs.startEpochMin < intervalloCand.endEpochMin;
+
+                    if (siSovrappongono) {
+                        return {
+                            bloccato: true,
+                            message: `❌ Conflitto orario il ${cand.giorno}: ${nomeDip} ha già un turno (${es.giorno} | ${es.orario}${es.reparto ? ` - ${es.reparto}` : ''}) che si sovrappone a ${cand.orario}.`
+                        };
+                    }
+
+                    // 4. Controllo riposo minimo 11 ore (660 minuti) CCNL
+                    let gapMinuti = null;
+                    if (intervalloEs.endEpochMin <= intervalloCand.startEpochMin) {
+                        gapMinuti = intervalloCand.startEpochMin - intervalloEs.endEpochMin;
+                    } else if (intervalloCand.endEpochMin <= intervalloEs.startEpochMin) {
+                        gapMinuti = intervalloEs.startEpochMin - intervalloCand.endEpochMin;
+                    }
+
+                    if (gapMinuti !== null && gapMinuti < 660) {
+                        const oreRiposo = (gapMinuti / 60).toFixed(1);
+                        warningsRiposo.push(
+                            `• ${cand.giorno} (${cand.orario}): per ${nomeDip} passano solo ${oreRiposo} ore di riposo rispetto al turno del ${es.giorno} (${es.orario}) — minimo consigliato CCNL: 11 ore.`
+                        );
+                    }
+                } else if (es.giorno === cand.giorno) {
+                    return {
+                        bloccato: true,
+                        message: `❌ Conflitto turno il ${cand.giorno}: ${nomeDip} ha già un turno registrato (${es.orario}).`
+                    };
+                }
+            }
+
+            // 3. Controllo veicolo già impegnato nella stessa fascia oraria
+            if (vid && es.veicolo_id && Number(es.veicolo_id) === vid) {
+                const nomeMezzo = mappaVeicoli[vid] || es.nome_veicolo || 'Veicolo';
+                const altroRider = es.nome_proprietario || mappaUtenti[Number(es.utente_id)] || 'un altro dipendente';
+
+                if (intervalloCand && intervalloEs) {
+                    const mezzoSovrapposto =
+                        intervalloCand.startEpochMin < intervalloEs.endEpochMin &&
+                        intervalloEs.startEpochMin < intervalloCand.endEpochMin;
+
+                    if (mezzoSovrapposto) {
+                        return {
+                            bloccato: true,
+                            message: `❌ Conflitto mezzo il ${cand.giorno}: "${nomeMezzo}" è già assegnato a ${altroRider} nella fascia ${es.giorno} | ${es.orario}.`
+                        };
+                    }
+                } else if (es.giorno === cand.giorno) {
+                    return {
+                        bloccato: true,
+                        message: `❌ Conflitto mezzo il ${cand.giorno}: "${nomeMezzo}" è già assegnato a ${altroRider} (${es.orario}).`
+                    };
+                }
+            }
+        }
+
+        processatiNelBatch.push({
+            giorno: cand.giorno,
+            orario: cand.orario,
+            utente_id: uid,
+            veicolo_id: vid,
+            reparto: cand.reparto,
+            stato: 'confermato',
+            nome_proprietario: nomeDip,
+            nome_veicolo: vid ? mappaVeicoli[vid] : null
+        });
+    }
+
+    return {
+        bloccato: false,
+        warnings: [...new Set(warningsRiposo)]
+    };
+}
+
 // --- HEALTHCHECK LEGGERO (NON TOCCA IL DB) ---
 app.get('/ping', (req, res) => res.status(200).send('OK'));
 
@@ -454,29 +620,49 @@ app.get('/api/turni', async (req, res) => {
 
 app.post('/api/turni', async (req, res) => {
     try {
-        let { giorno, orario, utente_id, reparto, veicolo_id, ricorrenza, stato } = req.body;
+        let { giorno, orario, utente_id, reparto, veicolo_id, ricorrenza, stato, forza_riposo } = req.body;
         
         let numSettimane = parseInt(ricorrenza, 10) || 1;
         let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id, 10) : null;
 
         let repartoFinale = (reparto || '').trim();
-        if (!repartoFinale) {
+        if (!repartoFinale && stato !== 'indisponibile') {
             const uRes = await pool.query("SELECT reparto FROM utenti WHERE id = $1", [utente_id]);
             const compitiUtente = uRes.rows.length > 0 ? parseCompitiList(uRes.rows[0].reparto) : [];
             repartoFinale = compitiUtente[0] || null;
         }
 
-        const [anno, mese, day] = giorno.split('-').map(Number);
-        let dataCorrente = new Date(Date.UTC(anno, mese - 1, day));
-        
+        const candidati = [];
         for (let i = 0; i < numSettimane; i++) {
-            let dataGiorno = dataCorrente.toISOString().split('T')[0];
-            
+            candidati.push({
+                giorno: spostaGiornoStr(giorno, i * 7),
+                orario,
+                utente_id,
+                reparto: repartoFinale,
+                veicolo_id: idVeicoloSafe
+            });
+        }
+
+        // Controllo conflitti orari, assenze, veicoli e riposo 11h CCNL (escluso quando si registra un'assenza)
+        if (stato !== 'indisponibile') {
+            const check = await verificaConflittiTurni(req.azienda_id, candidati);
+            if (check.bloccato) {
+                return res.json({ success: false, message: check.message });
+            }
+            if (check.warnings.length > 0 && !forza_riposo) {
+                return res.json({
+                    success: false,
+                    richiedeConfermaRiposo: true,
+                    warnings: check.warnings
+                });
+            }
+        }
+
+        for (const cand of candidati) {
             await pool.query(
                 "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
-                [dataGiorno, orario, utente_id, repartoFinale, idVeicoloSafe, stato, req.azienda_id]
+                [cand.giorno, cand.orario, cand.utente_id, cand.reparto, cand.veicolo_id, stato, req.azienda_id]
             );
-            dataCorrente.setUTCDate(dataCorrente.getUTCDate() + 7);
         }
         res.json({ success: true });
     } catch (err) { 
@@ -494,7 +680,19 @@ app.delete('/api/turni/:id', async (req, res) => {
 
 app.put('/api/turni/:id', async (req, res) => {
     try {
-        const { giorno, orario, utente_id, reparto, veicolo_id } = req.body;
+        const { giorno, orario, utente_id, reparto, veicolo_id, forza_riposo } = req.body;
+        const check = await verificaConflittiTurni(
+            req.azienda_id,
+            [{ giorno, orario, utente_id, reparto, veicolo_id: veicolo_id || null }],
+            req.params.id
+        );
+        if (check.bloccato) {
+            return res.json({ success: false, message: check.message });
+        }
+        if (check.warnings.length > 0 && !forza_riposo) {
+            return res.json({ success: false, richiedeConfermaRiposo: true, warnings: check.warnings });
+        }
+
         await pool.query(
             "UPDATE turni SET giorno = $1, orario = $2, utente_id = $3, reparto = $4, veicolo_id = $5 WHERE id = $6 AND azienda_id = $7", 
             [giorno, orario, utente_id, reparto, veicolo_id || null, req.params.id, req.azienda_id]
@@ -505,6 +703,27 @@ app.put('/api/turni/:id', async (req, res) => {
 
 app.put('/api/turni/:id/orario', async (req, res) => {
     try {
+        const turnoRes = await pool.query(
+            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+        const t = turnoRes.rows[0];
+
+        const check = await verificaConflittiTurni(
+            req.azienda_id,
+            [{ giorno: t.giorno, orario: req.body.orario, utente_id: t.utente_id, reparto: t.reparto, veicolo_id: t.veicolo_id }],
+            req.params.id
+        );
+        if (check.bloccato) {
+            return res.json({ success: false, message: check.message });
+        }
+        if (check.warnings.length > 0 && !req.body.forza_riposo) {
+            return res.json({ success: false, richiedeConfermaRiposo: true, warnings: check.warnings });
+        }
+
         await pool.query(
             "UPDATE turni SET orario = $1 WHERE id = $2 AND azienda_id = $3", 
             [req.body.orario, req.params.id, req.azienda_id]
@@ -515,6 +734,27 @@ app.put('/api/turni/:id/orario', async (req, res) => {
 
 app.put('/api/turni/:id/conferma', async (req, res) => {
     try {
+        const turnoRes = await pool.query(
+            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+        const t = turnoRes.rows[0];
+
+        const check = await verificaConflittiTurni(
+            req.azienda_id,
+            [{ giorno: t.giorno, orario: t.orario, utente_id: t.utente_id, reparto: t.reparto, veicolo_id: t.veicolo_id }],
+            req.params.id
+        );
+        if (check.bloccato) {
+            return res.json({ success: false, message: check.message });
+        }
+        if (check.warnings.length > 0 && !(req.body && req.body.forza_riposo)) {
+            return res.json({ success: false, richiedeConfermaRiposo: true, warnings: check.warnings });
+        }
+
         await pool.query("UPDATE turni SET stato = 'confermato' WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -589,6 +829,16 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
             });
         }
 
+        // Controllo se il sostituto ha assenze o turni sovrapposti
+        const check = await verificaConflittiTurni(
+            req.azienda_id,
+            [{ giorno: turno.giorno, orario: turno.orario, utente_id: sostitutoId, reparto: turno.reparto, veicolo_id: null }],
+            req.params.id
+        );
+        if (check.bloccato) {
+            return res.json({ success: false, message: check.message });
+        }
+
         await pool.query(
             "UPDATE turni SET stato = 'scambio_proposto', sostituto_id = $1 WHERE id = $2 AND azienda_id = $3",
             [sostitutoId, req.params.id, req.azienda_id]
@@ -610,11 +860,24 @@ app.put('/api/turni/:id/ritira-scambio', async (req, res) => {
 app.put('/api/turni/:id/approva-scambio', async (req, res) => {
     try {
         const turnoRes = await pool.query(
-            "SELECT sostituto_id FROM turni WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
+            "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
             [req.params.id, req.azienda_id]
         );
         if (turnoRes.rows.length === 0 || !turnoRes.rows[0].sostituto_id) {
             return res.json({ success: false, message: "Nessun sostituto da approvare per questo turno." });
+        }
+        const t = turnoRes.rows[0];
+
+        const check = await verificaConflittiTurni(
+            req.azienda_id,
+            [{ giorno: t.giorno, orario: t.orario, utente_id: t.sostituto_id, reparto: t.reparto, veicolo_id: t.veicolo_id }],
+            req.params.id
+        );
+        if (check.bloccato) {
+            return res.json({ success: false, message: check.message });
+        }
+        if (check.warnings.length > 0 && !(req.body && req.body.forza_riposo)) {
+            return res.json({ success: false, richiedeConfermaRiposo: true, warnings: check.warnings });
         }
 
         await pool.query(
