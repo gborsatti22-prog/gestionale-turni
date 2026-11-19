@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Gestionale Turni</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librerie per esportazione reale Excel (.xlsx) e PDF (.pdf) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
@@ -27,7 +28,7 @@
                 <button type="button" onclick="verificaCodice()" class="bg-yellow-600 hover:bg-yellow-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Verifica</button>
             </div>
 
-            <!-- STEP 2: LOGIN UTENTE (Scelta Profilo + Tasto Cambia Locale) -->
+            <!-- STEP 2: LOGIN UTENTE -->
             <div id="blocco-utente" class="hidden flex-col md:flex-row gap-2 w-full md:w-auto items-center">
                 <select id="login-select" required class="text-gray-900 p-2 rounded-lg border-0 w-full md:w-auto font-medium">
                     <option value="">-- Chi sei? --</option>
@@ -40,8 +41,12 @@
         </form>
 
         <!-- BARRA UTENTE LOGGATO -->
-        <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+        <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-2.5 w-full md:w-auto">
             <span id="nome-loggato" class="text-lg font-medium"></span>
+            <div id="blocco-notifiche-push" class="hidden flex items-center gap-1.5 w-full md:w-auto justify-center">
+                <button type="button" id="btn-attiva-push" onclick="attivaNotifichePush()" class="bg-amber-500 hover:bg-amber-600 transition text-gray-900 px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm">🔔 Attiva Notifiche</button>
+                <button type="button" id="btn-test-push" onclick="inviaNotificaTest()" class="hidden bg-gray-700 hover:bg-gray-600 transition text-white px-2.5 py-2 rounded-lg font-bold text-xs shadow-sm" title="Invia una notifica di prova su questo dispositivo">📨 Test</button>
+            </div>
             <button id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
             <button onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
         </div>
@@ -52,7 +57,6 @@
         <!-- SEZIONE SUPER ADMIN -->
         <div id="sezione-superadmin" class="hidden space-y-6">
             
-            <!-- CREA NUOVA ATTIVITÀ -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-700">
                 <h3 class="text-xl font-bold mb-1 flex items-center gap-2 text-gray-900">👑 Crea Nuova Attività</h3>
                 <p class="text-sm text-gray-500 mb-4">Assegna un codice univoco. La nuova attività partirà completamente vuota con un profilo Titolare pronto all'uso.</p>
@@ -80,7 +84,6 @@
                 </form>
             </div>
 
-            <!-- LISTA TUTTE LE ATTIVITÀ -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-bold text-gray-900">🏢 Attività Registrate nel Sistema</h3>
@@ -106,7 +109,6 @@
         <!-- SEZIONE MANAGER -->
         <div id="sezione-manager" class="hidden space-y-6">
             
-            <!-- SCHEDA 1: CREA E PROGRAMMA TURNO -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                     <h3 class="text-xl font-bold flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
@@ -137,7 +139,6 @@
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE/NOTTURNE/FESTIVE ED EXPORT EXCEL/PDF -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
                     <div>
@@ -174,7 +175,6 @@
                 </div>
             </div>
 
-            <!-- SCHEDA 3 & 4: PROFILO & REPARTI/COMPITI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
                     <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
@@ -199,7 +199,6 @@
                 </div>
             </div>
 
-            <!-- SCHEDA 5 & 6: TEAM E VEICOLI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-600 overflow-x-auto">
                     <h3 class="text-xl font-bold mb-4">👥 Personale (Multi-Compito)</h3>
@@ -300,6 +299,8 @@
 
     <!-- SCRIPT JAVASCRIPT -->
     <script>
+        const SESSION_STORAGE_KEY = 'gestionale_turni_sessione_v1';
+
         let utenteLoggato = null; 
         let aziendaCorrenteId = null; 
         let superadminToken = null;
@@ -318,6 +319,194 @@
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
         document.getElementById('mese-calendario').value = meseCorrenteStr;
+
+        // Registrazione Service Worker all'avvio
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.error('Errore registrazione Service Worker:', err);
+                });
+            });
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function aggiornaStatoBottonePush() {
+            const blocco = document.getElementById('blocco-notifiche-push');
+            const btnAttiva = document.getElementById('btn-attiva-push');
+            const btnTest = document.getElementById('btn-test-push');
+
+            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') {
+                blocco.classList.add('hidden');
+                return;
+            }
+
+            blocco.classList.remove('hidden');
+
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                btnAttiva.textContent = '🔕 Push non supportate';
+                btnAttiva.disabled = true;
+                btnAttiva.className = 'bg-gray-600 text-gray-300 px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed';
+                btnTest.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                if (sub && Notification.permission === 'granted') {
+                    btnAttiva.textContent = '🔔 Notifiche ON';
+                    btnAttiva.className = 'bg-emerald-600 hover:bg-emerald-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm';
+                    btnTest.classList.remove('hidden');
+
+                    // Sincronizza silenziosamente sul server che questo dispositivo appartiene all'utente attuale
+                    apiFetch('/api/push/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            utente_id: utenteLoggato.id,
+                            subscription: sub.toJSON()
+                        })
+                    }).catch(() => {});
+                } else {
+                    btnAttiva.textContent = '🔔 Attiva Notifiche';
+                    btnAttiva.className = 'bg-amber-500 hover:bg-amber-600 transition text-gray-900 px-3.5 py-2 rounded-lg font-bold text-sm shadow-sm';
+                    btnTest.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error('Errore controllo subscription:', e);
+            }
+        }
+
+        window.attivaNotifichePush = async function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+            if (isIOS && !isStandalone) {
+                return alert(
+                    "📱 Istruzioni per iPhone / iPad:\n\n" +
+                    "Apple consente le notifiche solo se apri l'app dalla schermata Home:\n" +
+                    "1. Tocca l'icona Condividi (quadrato con freccia verso l'alto) in basso su Safari.\n" +
+                    "2. Scegli 'Aggiungi alla schermata Home'.\n" +
+                    "3. Apri la nuova icona dalla schermata Home e premi di nuovo 'Attiva Notifiche'."
+                );
+            }
+
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                return alert("Il tuo browser non supporta le notifiche push.");
+            }
+
+            try {
+                const keyRes = await apiFetch('/api/push/vapid-public-key');
+                const keyData = await keyRes.json();
+                if (!keyData.enabled || !keyData.publicKey) {
+                    return alert("Le chiavi VAPID non sono ancora state configurate nelle variabili d'ambiente su Render.");
+                }
+
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    return alert("Permesso notifiche negato. Puoi riattivarlo dalle impostazioni del browser.");
+                }
+
+                const reg = await navigator.serviceWorker.ready;
+                let sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+                    });
+                }
+
+                const saveRes = await apiFetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        utente_id: utenteLoggato.id,
+                        subscription: sub.toJSON()
+                    })
+                });
+                const saveData = await saveRes.json();
+
+                if (saveData.success) {
+                    alert(`✅ Notifiche attivate per ${utenteLoggato.nome}! Riceverai qui solo gli aggiornamenti che ti riguardano.`);
+                    aggiornaStatoBottonePush();
+                } else {
+                    alert(saveData.message || "Errore durante l'attivazione delle notifiche.");
+                }
+            } catch (err) {
+                console.error("Errore attivazione push:", err);
+                alert("Errore durante l'attivazione delle notifiche: " + err.message);
+            }
+        };
+
+        window.inviaNotificaTest = async function() {
+            const res = await apiFetch('/api/push/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    utente_id: utenteLoggato.id,
+                    nome: utenteLoggato.nome
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || "Impossibile inviare la notifica di prova.");
+            }
+        };
+
+        // --- PERSISTENZA SESSIONE ("RESTA COLLEGATO") ---
+        function salvaSessioneLocale() {
+            if (!utenteLoggato) return;
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+                utenteLoggato,
+                aziendaCorrenteId,
+                superadminToken
+            }));
+        }
+
+        function pulisciSessioneLocale() {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+
+        function ripristinaSessioneLocale() {
+            try {
+                const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (!saved || !saved.utenteLoggato) return;
+
+                utenteLoggato = saved.utenteLoggato;
+                aziendaCorrenteId = saved.aziendaCorrenteId;
+                superadminToken = saved.superadminToken || null;
+
+                document.getElementById('form-login').classList.remove('flex');
+                document.getElementById('form-login').classList.add('hidden');
+                document.getElementById('user-info').classList.remove('hidden');
+                document.getElementById('user-info').classList.add('flex');
+                document.getElementById('nome-loggato').innerHTML = `Ciao, <strong>${utenteLoggato.nome}</strong>`;
+                document.getElementById('contenuto-app').classList.remove('hidden');
+
+                if (utenteLoggato.ruolo === 'superadmin') {
+                    mostraPannelloSuperAdmin();
+                } else {
+                    caricaImpostazioni();
+                    attivaVistaAzienda(utenteLoggato.ruolo === 'manager' ? 'manager' : 'staff');
+                }
+            } catch (e) {
+                pulisciSessioneLocale();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', ripristinaSessioneLocale);
 
         function parseCompiti(repartoStr) {
             if (!repartoStr) return [];
@@ -346,7 +535,6 @@
             return fetch(url, options);
         }
 
-        // Gestore centralizzato per salvataggi/modifiche turno con controllo conflitti e riposo 11h CCNL
         async function inviaRichiestaTurnoConControlli(url, method, payload, onSuccess) {
             const res = await apiFetch(url, {
                 method,
@@ -414,6 +602,7 @@
             aziendaCorrenteId = null;
             superadminToken = null;
             turniGlobal = [];
+            pulisciSessioneLocale();
             
             document.getElementById('contenuto-app').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
@@ -448,6 +637,7 @@
                     if (data.superadminToken) {
                         superadminToken = data.superadminToken;
                     }
+                    salvaSessioneLocale();
 
                     document.getElementById('form-login').classList.remove('flex');
                     document.getElementById('form-login').classList.add('hidden');
@@ -474,6 +664,7 @@
             document.getElementById('header-business').innerHTML = 'Console Super Admin 👑';
             document.getElementById('page-title').textContent = 'Super Admin - Gestionale Turni';
             document.getElementById('btn-torna-superadmin').classList.add('hidden');
+            document.getElementById('blocco-notifiche-push').classList.add('hidden');
 
             document.getElementById('sezione-superadmin').classList.remove('hidden');
             document.getElementById('sezione-manager').classList.add('hidden');
@@ -490,6 +681,8 @@
             if (superadminToken) {
                 document.getElementById('btn-torna-superadmin').classList.remove('hidden');
             }
+
+            aggiornaStatoBottonePush();
 
             if (ruolo === 'manager') {
                 document.getElementById('sezione-manager').classList.remove('hidden');
@@ -521,10 +714,27 @@
 
         window.tornaSuperAdmin = function() {
             utenteLoggato = { id: 0, nome: 'Super Admin', ruolo: 'superadmin', azienda_id: 0 };
+            salvaSessioneLocale();
             mostraPannelloSuperAdmin();
         };
         
-        window.eseguiLogout = () => location.reload();
+        window.eseguiLogout = async function() {
+            try {
+                if ('serviceWorker' in navigator && 'PushManager' in window) {
+                    const reg = await navigator.serviceWorker.ready;
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub) {
+                        await apiFetch('/api/push/unsubscribe', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: sub.endpoint })
+                        });
+                    }
+                }
+            } catch (e) {}
+            pulisciSessioneLocale();
+            location.reload();
+        };
 
         // --- FUNZIONI SUPER ADMIN ---
         function caricaAziendeSuperAdmin() {
@@ -627,6 +837,7 @@
                         aziendaCorrenteId = data.azienda.id;
                         utenteLoggato = data.utente;
                         nomeAttivitaCorrente = data.azienda.nome_locale;
+                        salvaSessioneLocale();
                         caricaImpostazioni();
                         attivaVistaAzienda('manager');
                     } else {
@@ -752,6 +963,7 @@
                     const updatedMe = utenti.find(u => u.id === utenteLoggato.id);
                     if (updatedMe) {
                         utenteLoggato.reparto = updatedMe.reparto;
+                        salvaSessioneLocale();
                         aggiornaCompitiPropostaStaff();
                     }
                 }
@@ -886,7 +1098,6 @@
 
             const wb = XLSX.utils.book_new();
 
-            // Foglio 1: Riepilogo Mensile
             const righeRiepilogo = [
                 [`PROSPETTO ORE LAVORATE - ${nomeAttivitaCorrente.toUpperCase()}`],
                 [`Mese di riferimento: ${mese}`, '', 'Fascia notturna: 22:00 - 06:00 | Festive: Domeniche e festività nazionali'],
@@ -939,7 +1150,6 @@
             ];
             XLSX.utils.book_append_sheet(wb, wsRiepilogo, 'Riepilogo Mensile');
 
-            // Foglio 2: Dettaglio Giornaliero Turni
             const righeDettaglio = [
                 [`DETTAGLIO TURNI DEL MESE (${mese}) - ${nomeAttivitaCorrente.toUpperCase()}`],
                 [],
@@ -987,7 +1197,6 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-            // Intestazione scura
             doc.setFillColor(17, 24, 39);
             doc.rect(0, 0, 297, 26, 'F');
 
@@ -1000,7 +1209,6 @@
             doc.setFont('helvetica', 'normal');
             doc.text(`Mese di riferimento: ${mese}   |   Documento per Consulente del Lavoro`, 14, 19);
 
-            // Tabella Riepilogo
             let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
             const bodyRiepilogo = stats.map(s => {
                 const ord = Number(s.ore_ordinarie || 0);
@@ -1061,14 +1269,12 @@
             doc.setFontSize(8.5);
             doc.text('Criteri di calcolo: Ore Notturne = fascia 22:00 - 06:00 | Ore Festive = Domeniche e festività nazionali italiane.', 14, afterTableY);
 
-            // Spazio firma
             const oggiFormat = new Date().toLocaleDateString('it-IT');
             doc.setTextColor(30, 30, 30);
             doc.setFontSize(9.5);
             doc.text(`Data generazione: ${oggiFormat}`, 14, afterTableY + 12);
             doc.text('Timbro e Firma Titolare: __________________________________________', 165, afterTableY + 12);
 
-            // Pagina 2: Dettaglio turni del mese
             if (dettaglio.length > 0) {
                 doc.addPage();
                 doc.setFillColor(17, 24, 39);
