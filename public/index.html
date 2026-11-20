@@ -45,6 +45,7 @@
         <!-- BARRA UTENTE LOGGATO -->
         <div id="user-info" class="hidden flex flex-col md:flex-row items-center gap-2.5 w-full md:w-auto">
             <span id="nome-loggato" class="text-lg font-medium"></span>
+            <button type="button" id="btn-aggiorna-app" onclick="aggiornaDatiDashboard()" class="bg-slate-700 hover:bg-slate-600 transition text-white px-3.5 py-2 rounded-lg font-bold text-sm w-full md:w-auto shadow-sm">🔄 Aggiorna</button>
             <button type="button" id="btn-attiva-notifiche" onclick="gestisciNotifichePush()" class="hidden bg-indigo-600 hover:bg-indigo-700 transition text-white px-3.5 py-2 rounded-lg font-bold text-sm w-full md:w-auto shadow-sm">🔔 Attiva Notifiche</button>
             <button type="button" id="btn-torna-superadmin" onclick="tornaSuperAdmin()" class="hidden bg-purple-600 hover:bg-purple-700 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">👑 Torna a Super Admin</button>
             <button type="button" onclick="eseguiLogout()" class="bg-red-500 hover:bg-red-600 transition text-white px-4 py-2 rounded-lg font-bold w-full md:w-auto shadow-sm">Esci</button>
@@ -265,12 +266,13 @@
         <!-- BACHECA TURNI -->
         <div id="bacheca-turni" class="bg-white p-6 rounded-xl shadow-md">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
-                <div class="flex items-center gap-4">
+                <div class="flex flex-wrap items-center gap-3">
                     <h3 class="text-xl font-bold">📅 Bacheca Turni</h3>
                     <div class="flex bg-gray-200 p-1 rounded-lg border">
                         <button type="button" onclick="cambiaVista('lista')" id="btn-vista-lista" class="px-4 py-1.5 rounded bg-white shadow-sm font-bold text-sm transition">📋 Lista</button>
                         <button type="button" onclick="cambiaVista('calendario')" id="btn-vista-calendario" class="px-4 py-1.5 rounded text-gray-500 hover:text-gray-800 font-bold text-sm transition">📅 Calendario</button>
                     </div>
+                    <button type="button" onclick="aggiornaDatiDashboard()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1.5 rounded-lg font-bold text-sm transition" title="Aggiorna turni">🔄</button>
                 </div>
                 
                 <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
@@ -330,6 +332,46 @@
                 navigator.serviceWorker.register('/sw.js').catch(() => {});
             });
         }
+
+        // --- AGGIORNAMENTO RAPIDO DATI DASHBOARD (SENZA LOGOUT) ---
+        window.aggiornaDatiDashboard = async function() {
+            if (!utenteLoggato) return;
+            const btn = document.getElementById('btn-aggiorna-app');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Aggiorno...';
+            }
+
+            try {
+                if (utenteLoggato.ruolo === 'superadmin') {
+                    await caricaAziendeSuperAdmin();
+                } else {
+                    await caricaImpostazioni();
+                    await Promise.all([caricaReparti(), caricaVeicoli()]);
+                    await caricaUtenti();
+                    await caricaTurni();
+                    await aggiornaStatoBottoneNotifiche();
+                }
+
+                if (btn) {
+                    btn.textContent = '✅ Aggiornato';
+                    btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+                    btn.classList.add('bg-emerald-700');
+                    setTimeout(() => {
+                        btn.textContent = '🔄 Aggiorna';
+                        btn.classList.remove('bg-emerald-700');
+                        btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
+                        btn.disabled = false;
+                    }, 1500);
+                }
+            } catch (err) {
+                if (btn) {
+                    btn.textContent = '🔄 Aggiorna';
+                    btn.disabled = false;
+                }
+                alert("Errore durante l'aggiornamento. Riprova tra qualche secondo.");
+            }
+        };
 
         function parseCompiti(repartoStr) {
             if (!repartoStr) return [];
@@ -735,7 +777,7 @@
 
         // --- FUNZIONI SUPER ADMIN ---
         function caricaAziendeSuperAdmin() {
-            apiFetch('/api/superadmin/aziende')
+            return apiFetch('/api/superadmin/aziende')
                 .then(res => res.json())
                 .then(aziende => {
                     const tbody = document.getElementById('tabella-aziende-sa');
@@ -1038,7 +1080,7 @@
         function caricaStatisticheMensili() {
             const mese = document.getElementById('selettore-mese-stats').value;
             if (!mese) return;
-            apiFetch(`/api/statistiche/mensili?mese=${mese}`)
+            return apiFetch(`/api/statistiche/mensili?mese=${mese}`)
                 .then(res => res.json())
                 .then(data => {
                     const stats = Array.isArray(data) ? data : (data.riepilogo || []);
@@ -1472,8 +1514,8 @@
         };
 
         function caricaTurni() {
-            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') return;
-            apiFetch('/api/turni').then(res => res.json()).then(turni => {
+            if (!utenteLoggato || utenteLoggato.ruolo === 'superadmin') return Promise.resolve();
+            return apiFetch('/api/turni').then(res => res.json()).then(turni => {
                 turniGlobal = turni; 
                 const filtroRepartoVal = document.getElementById('filtro-reparto').value;
                 const soloMiei = document.getElementById('filtro-miei').checked;
