@@ -429,12 +429,28 @@ app.use('/api', (req, res, next) => {
     next();
 });
 
-// --- API NOTIFICHE PUSH ---
+// --- API NOTIFICHE PUSH (ATTIVA / VERIFICA / DISATTIVA) ---
 app.get('/api/push/vapid-public-key', (req, res) => {
     if (!VAPID_PUBLIC_KEY) {
         return res.status(503).json({ error: "Chiavi VAPID non configurate sul server." });
     }
     res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/check', async (req, res) => {
+    try {
+        const { utente_id, endpoint } = req.body;
+        if (!utente_id || !endpoint) {
+            return res.json({ active: false });
+        }
+        const result = await pool.query(
+            "SELECT id FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2 AND endpoint = $3 LIMIT 1",
+            [Number(utente_id), Number(req.azienda_id), endpoint]
+        );
+        res.json({ active: result.rows.length > 0 });
+    } catch (err) {
+        res.json({ active: false });
+    }
 });
 
 app.post('/api/push/subscribe', async (req, res) => {
@@ -463,6 +479,31 @@ app.post('/api/push/subscribe', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error("Errore salvataggio push subscription:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+    try {
+        const { utente_id, endpoint } = req.body;
+        if (!utente_id) {
+            return res.status(400).json({ success: false, message: "Utente non valido." });
+        }
+
+        if (endpoint) {
+            await pool.query(
+                "DELETE FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2 AND endpoint = $3",
+                [Number(utente_id), Number(req.azienda_id), endpoint]
+            );
+        } else {
+            await pool.query(
+                "DELETE FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2",
+                [Number(utente_id), Number(req.azienda_id)]
+            );
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Errore disattivazione push subscription:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
