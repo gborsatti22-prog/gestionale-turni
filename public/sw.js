@@ -19,6 +19,8 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
         self.registration.showNotification(data.title || 'Gestionale Turni', {
             body: data.body || '',
+            icon: '/icon.svg',
+            badge: '/icon.svg',
             tag: data.tag || 'turno-notifica',
             renotify: true
         })
