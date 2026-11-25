@@ -1,6 +1,7 @@
 const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
+const crypto = require('crypto');
 const cors = require('cors');
 const webpush = require('web-push');
 
@@ -9,6 +10,11 @@ const PORT = process.env.PORT || 3000;
 
 const SUPERADMIN_CODE = 0;
 const SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || 'superadmin123';
+
+// Segreto HMAC stabile (usa AUTH_SECRET se impostato su Render, altrimenti deriva un segreto coerente)
+const AUTH_SECRET = process.env.AUTH_SECRET
+    ? Buffer.from(process.env.AUTH_SECRET, 'utf8')
+    : crypto.createHash('sha256').update(`${process.env.DATABASE_URL || 'local-dev'}:${SUPERADMIN_PASS}`).digest();
 
 const VAPID_PUBLIC_KEY = (process.env.VAPID_PUBLIC_KEY || '').trim();
 const VAPID_PRIVATE_KEY = (process.env.VAPID_PRIVATE_KEY || '').trim();
@@ -21,26 +27,128 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     console.warn("⚠️ Chiavi VAPID non configurate: imposta VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY su Render.");
 }
 
-app.use(express.json());
-app.use(cors());
+// --- SICUREZZA PASSWORD (SCRYPT + COMPATIBILITÀ ACCOUNT ESISTENTI) ---
+function hashPassword(plainPassword) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(String(plainPassword), salt, 64).toString('hex');
+    return `scrypt$${salt}$${derived}`;
+}
+
+function verifyPassword(plainPassword, storedPassword) {
+    if (!storedPassword || plainPassword === undefined || plainPassword === null) {
+        return { valid: false, needsUpgrade: false };
+    }
+    const input = String(plainPassword);
+    const stored = String(storedPassword);
+
+    if (stored.startsWith('scrypt$')) {
+        const parts = stored.split('$');
+        if (parts.length !== 3) return { valid: false, needsUpgrade: false };
+        const [, salt, originalHex] = parts;
+        const derived = crypto.scryptSync(input, salt, 64);
+        const original = Buffer.from(originalHex, 'hex');
+        if (derived.length !== original.length) return { valid: false, needsUpgrade: false };
+        return { valid: crypto.timingSafeEqual(derived, original), needsUpgrade: false };
+    }
+
+    // Compatibilità con eventuali password già presenti in chiaro sul DB
+    const a = crypto.createHash('sha256').update(input).digest();
+    const b = crypto.createHash('sha256').update(stored).digest();
+    const valid = crypto.timingSafeEqual(a, b);
+    return { valid, needsUpgrade: valid };
+}
+
+function safeEqualStrings(a, b) {
+    const hashA = crypto.createHash('sha256').update(String(a || '')).digest();
+    const hashB = crypto.createHash('sha256').update(String(b || '')).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+}
+
+// --- TOKEN DI SESSIONE FIRMATO (STATELESS HMAC-SHA256) ---
+function signSessionToken(payloadObj) {
+    const body = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+    const sig = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url');
+    return `${body}.${sig}`;
+}
+
+function verifySessionToken(token) {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    const [body, sig] = parts;
+    const expectedSig = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url');
+    if (!safeEqualStrings(sig, expectedSig)) return null;
+
+    try {
+        const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+        if (payload.exp && Date.now() > payload.exp) return null;
+        return payload;
+    } catch {
+        return null;
+    }
+}
+
+// --- RATE LIMITER LEGGERO IN MEMORIA PER LOGIN / VERIFICA CODICE ---
+const authAttempts = new Map();
+function checkRateLimit(req, res, next) {
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+    const now = Date.now();
+    const windowMs = 5 * 60 * 1000;
+    const maxAttempts = 40;
+
+    let entry = authAttempts.get(ip);
+    if (!entry || now > entry.resetAt) {
+        entry = { count: 0, resetAt: now + windowMs };
+    }
+    entry.count += 1;
+    authAttempts.set(ip, entry);
+
+    if (authAttempts.size > 2000) {
+        for (const [k, v] of authAttempts.entries()) {
+            if (now > v.resetAt) authAttempts.delete(k);
+        }
+    }
+
+    if (entry.count > maxAttempts) {
+        return res.status(429).json({ success: false, message: "Troppi tentativi ravvicinati. Attendi qualche minuto e riprova." });
+    }
+    next();
+}
+
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '1mb' }));
+
+// CORS ristretto allo stesso host (o ALLOWED_ORIGIN se configurato)
+app.use(cors((req, callback) => {
+    const origin = req.header('Origin');
+    if (!origin) return callback(null, { origin: true });
+
+    const allowedEnv = (process.env.ALLOWED_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (allowedEnv.includes(origin)) return callback(null, { origin: true });
+
+    try {
+        const originHost = new URL(origin).host;
+        const reqHost = req.header('Host');
+        if (reqHost && originHost === reqHost) {
+            return callback(null, { origin: true });
+        }
+    } catch {}
+
+    callback(null, { origin: false });
+}));
+
 app.use(express.static('public'));
 
 // 1. CONNESSIONE AL DATABASE CLOUD (NEON)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost')
+        ? false
+        : { rejectUnauthorized: false }
 });
 
-pool.query("SELECT NOW()", (err, res) => {
-    if (err) console.error("Errore di connessione a PostgreSQL:", err);
-    else {
-        console.log("🚀 Connesso con successo a PostgreSQL su Neon!");
-        creaTabelle();
-    }
-});
-
-// 2. CREAZIONE TABELLE (Sintassi PostgreSQL Multi-Tenant)
-function creaTabelle() {
+// 2. CREAZIONE TABELLE E INDICI (Sintassi PostgreSQL Multi-Tenant)
+async function creaTabelle() {
     const queries = `
         CREATE TABLE IF NOT EXISTS aziende (id SERIAL PRIMARY KEY, nome_locale TEXT);
         CREATE TABLE IF NOT EXISTS impostazioni (id SERIAL PRIMARY KEY, nome_business TEXT, emoji_business TEXT, azienda_id INTEGER);
@@ -66,27 +174,37 @@ function creaTabelle() {
             p256dh TEXT NOT NULL,
             auth TEXT NOT NULL
         );
+
+        CREATE INDEX IF NOT EXISTS idx_impostazioni_azienda ON impostazioni(azienda_id);
+        CREATE INDEX IF NOT EXISTS idx_reparti_azienda ON reparti(azienda_id);
+        CREATE INDEX IF NOT EXISTS idx_utenti_azienda ON utenti(azienda_id);
+        CREATE INDEX IF NOT EXISTS idx_veicoli_azienda ON veicoli(azienda_id);
+        CREATE INDEX IF NOT EXISTS idx_turni_azienda_giorno ON turni(azienda_id, giorno);
+        CREATE INDEX IF NOT EXISTS idx_turni_utente ON turni(utente_id);
+        CREATE INDEX IF NOT EXISTS idx_push_azienda_utente ON push_subscriptions(azienda_id, utente_id);
     `;
-    pool.query(queries, (err) => {
-        if (err) console.error("Errore creazione tabelle:", err);
-        else controllaDatiIniziali();
-    });
+    await pool.query(queries);
+    await controllaDatiIniziali();
 }
 
-function controllaDatiIniziali() {
-    pool.query("SELECT COUNT(*) AS count FROM aziende", (err, result) => {
-        if (!err && parseInt(result.rows[0].count, 10) === 0) {
-            pool.query("INSERT INTO aziende (id, nome_locale) VALUES (1, 'La Mia Pizzeria')");
-        }
-    });
+async function controllaDatiIniziali() {
+    const azRes = await pool.query("SELECT COUNT(*) AS count FROM aziende");
+    if (parseInt(azRes.rows[0].count, 10) === 0) {
+        await pool.query("INSERT INTO aziende (id, nome_locale) VALUES (1, 'La Mia Pizzeria')");
+        await pool.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
+    }
 
-    pool.query("SELECT COUNT(*) AS count FROM utenti", (err, result) => {
-        if (!err && parseInt(result.rows[0].count, 10) === 0) {
-            pool.query("INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', 'admin123', 1)");
-            pool.query("INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ('Gestionale Turni', '🍔🛵', 1)");
-            console.log("Dati iniziali inseriti.");
-        }
-    });
+    const utRes = await pool.query("SELECT COUNT(*) AS count FROM utenti");
+    if (parseInt(utRes.rows[0].count, 10) === 0) {
+        await pool.query(
+            "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', $1, 1)",
+            [hashPassword('admin123')]
+        );
+        await pool.query(
+            "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ('Gestionale Turni', '🍔🛵', 1)"
+        );
+        console.log("Dati iniziali inseriti.");
+    }
 }
 
 function parseCompitiList(repartoStr) {
@@ -406,26 +524,57 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
 // --- HEALTHCHECK LEGGERO (NON TOCCA IL DB) ---
 app.get('/ping', (req, res) => res.status(200).send('OK'));
 
-// --- MIDDLEWARE DI SICUREZZA MULTI-TENANT & SUPER ADMIN ---
+// --- MIDDLEWARE DI SICUREZZA MULTI-TENANT, TOKEN & RUOLI ---
+function requireManager(req, res, next) {
+    if (!req.user || (req.user.ruolo !== 'manager' && req.user.ruolo !== 'superadmin')) {
+        return res.status(403).json({ success: false, error: "Operazione riservata al Titolare / Manager." });
+    }
+    next();
+}
+
 app.use('/api', (req, res, next) => {
     if (req.path.startsWith('/verifica-azienda') || req.path === '/login') {
         return next();
     }
 
+    const saHeader = req.headers['x-superadmin-token'];
+    const saPayload = verifySessionToken(saHeader);
+    const isSuperAdmin = Boolean(saPayload && saPayload.ruolo === 'superadmin');
+
     if (req.path.startsWith('/superadmin')) {
-        const token = req.headers['x-superadmin-token'];
-        if (token !== SUPERADMIN_PASS) {
+        if (!isSuperAdmin) {
             return res.status(403).json({ error: "Accesso negato: privilegi Super Admin richiesti." });
         }
+        req.user = { id: 0, ruolo: 'superadmin', azienda_id: 0 };
         return next();
     }
-    
-    const aziendaId = req.headers['x-azienda-id'];
-    if (aziendaId === undefined || aziendaId === null || aziendaId === '') {
-        return res.status(401).json({ error: "Accesso negato: Codice Azienda mancante." });
+
+    const aziendaIdRaw = req.headers['x-azienda-id'];
+    const aziendaIdNum = parseInt(aziendaIdRaw, 10);
+    if (isNaN(aziendaIdNum) || aziendaIdNum <= 0) {
+        return res.status(401).json({ error: "Accesso negato: Codice Azienda mancante o non valido." });
     }
-    
-    req.azienda_id = aziendaId;
+
+    if (isSuperAdmin) {
+        req.azienda_id = aziendaIdNum;
+        req.user = { id: 0, ruolo: 'superadmin', azienda_id: aziendaIdNum };
+        return next();
+    }
+
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const userPayload = verifySessionToken(bearerToken);
+
+    if (!userPayload || Number(userPayload.aid) !== aziendaIdNum) {
+        return res.status(401).json({ error: "Sessione non valida o scaduta. Effettua nuovamente l'accesso." });
+    }
+
+    req.azienda_id = aziendaIdNum;
+    req.user = {
+        id: Number(userPayload.uid),
+        ruolo: userPayload.ruolo,
+        azienda_id: aziendaIdNum
+    };
     next();
 });
 
@@ -443,6 +592,9 @@ app.post('/api/push/check', async (req, res) => {
         if (!utente_id || !endpoint) {
             return res.json({ active: false });
         }
+        if (req.user.ruolo !== 'superadmin' && Number(utente_id) !== Number(req.user.id)) {
+            return res.json({ active: false });
+        }
         const result = await pool.query(
             "SELECT id FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2 AND endpoint = $3 LIMIT 1",
             [Number(utente_id), Number(req.azienda_id), endpoint]
@@ -458,6 +610,9 @@ app.post('/api/push/subscribe', async (req, res) => {
         const { utente_id, subscription } = req.body;
         if (!utente_id || !subscription || !subscription.endpoint || !subscription.keys) {
             return res.status(400).json({ success: false, message: "Dati subscription non validi." });
+        }
+        if (req.user.ruolo !== 'superadmin' && Number(utente_id) !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Non autorizzato." });
         }
 
         await pool.query(
@@ -489,6 +644,9 @@ app.post('/api/push/unsubscribe', async (req, res) => {
         if (!utente_id) {
             return res.status(400).json({ success: false, message: "Utente non valido." });
         }
+        if (req.user.ruolo !== 'superadmin' && Number(utente_id) !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Non autorizzato." });
+        }
 
         if (endpoint) {
             await pool.query(
@@ -509,9 +667,12 @@ app.post('/api/push/unsubscribe', async (req, res) => {
 });
 
 // --- API VERIFICA CODICE & LOGIN ---
-app.get('/api/verifica-azienda/:codice', async (req, res) => {
+app.get('/api/verifica-azienda/:codice', checkRateLimit, async (req, res) => {
     try {
         const codiceNum = parseInt(req.params.codice, 10);
+        if (isNaN(codiceNum) || codiceNum < 0) {
+            return res.json({ success: false, message: "Codice attività non valido." });
+        }
         if (codiceNum === SUPERADMIN_CODE) {
             return res.json({
                 success: true,
@@ -522,7 +683,21 @@ app.get('/api/verifica-azienda/:codice', async (req, res) => {
 
         const result = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [codiceNum]);
         if (result.rows.length > 0) {
-            res.json({ success: true, isSuperAdmin: false, azienda: result.rows[0] });
+            const impRes = await pool.query(
+                "SELECT nome_business, emoji_business FROM impostazioni WHERE azienda_id = $1 LIMIT 1",
+                [codiceNum]
+            );
+            const utentiRes = await pool.query(
+                "SELECT id, nome FROM utenti WHERE azienda_id = $1 ORDER BY id ASC",
+                [codiceNum]
+            );
+            res.json({
+                success: true,
+                isSuperAdmin: false,
+                azienda: result.rows[0],
+                impostazioni: impRes.rows[0] || {},
+                utenti: utentiRes.rows
+            });
         } else {
             res.json({ success: false, message: "Codice attività inesistente." });
         }
@@ -531,28 +706,74 @@ app.get('/api/verifica-azienda/:codice', async (req, res) => {
     }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', checkRateLimit, async (req, res) => {
     try {
         const { utente_id, password } = req.body;
 
         if (utente_id === 'superadmin') {
-            if (password === SUPERADMIN_PASS) {
+            if (safeEqualStrings(password, SUPERADMIN_PASS)) {
+                const token = signSessionToken({
+                    uid: 0,
+                    aid: 0,
+                    ruolo: 'superadmin',
+                    exp: Date.now() + 12 * 60 * 60 * 1000
+                });
                 return res.json({
                     success: true,
                     utente: { id: 0, nome: 'Super Admin', ruolo: 'superadmin', reparto: 'Sistema', azienda_id: 0 },
-                    superadminToken: SUPERADMIN_PASS
+                    superadminToken: token,
+                    authToken: token
                 });
             } else {
                 return res.json({ success: false, message: "Password Super Admin errata" });
             }
         }
 
-        const result = await pool.query(
-            "SELECT id, nome, ruolo, reparto, azienda_id FROM utenti WHERE id = $1 AND password = $2", 
-            [utente_id, password]
-        );
-        if (result.rows.length > 0) res.json({ success: true, utente: result.rows[0] });
-        else res.json({ success: false, message: "Password errata" });
+        const uidNum = parseInt(utente_id, 10);
+        if (isNaN(uidNum) || uidNum <= 0) {
+            return res.json({ success: false, message: "Seleziona un profilo valido." });
+        }
+
+        const aziendaIdHeader = parseInt(req.headers['x-azienda-id'], 10);
+        const query = !isNaN(aziendaIdHeader) && aziendaIdHeader > 0
+            ? "SELECT id, nome, ruolo, reparto, password, azienda_id FROM utenti WHERE id = $1 AND azienda_id = $2"
+            : "SELECT id, nome, ruolo, reparto, password, azienda_id FROM utenti WHERE id = $1";
+        const params = !isNaN(aziendaIdHeader) && aziendaIdHeader > 0 ? [uidNum, aziendaIdHeader] : [uidNum];
+
+        const result = await pool.query(query, params);
+        if (result.rows.length === 0) {
+            return res.json({ success: false, message: "Password errata" });
+        }
+
+        const userRow = result.rows[0];
+        const checkPass = verifyPassword(password, userRow.password);
+        if (!checkPass.valid) {
+            return res.json({ success: false, message: "Password errata" });
+        }
+
+        // Migra automaticamente eventuali password legacy in chiaro a scrypt
+        if (checkPass.needsUpgrade) {
+            await pool.query("UPDATE utenti SET password = $1 WHERE id = $2", [hashPassword(password), userRow.id]);
+        }
+
+        const authToken = signSessionToken({
+            uid: userRow.id,
+            aid: userRow.azienda_id,
+            ruolo: userRow.ruolo,
+            exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+        });
+
+        res.json({
+            success: true,
+            utente: {
+                id: userRow.id,
+                nome: userRow.nome,
+                ruolo: userRow.ruolo,
+                reparto: userRow.reparto,
+                azienda_id: userRow.azienda_id
+            },
+            authToken
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -578,6 +799,7 @@ app.get('/api/superadmin/aziende', async (req, res) => {
 });
 
 app.post('/api/superadmin/aziende', async (req, res) => {
+    const client = await pool.connect();
     try {
         const { codice, nome_locale, emoji_business, password_titolare } = req.body;
         const codiceNum = parseInt(codice, 10);
@@ -589,8 +811,11 @@ app.post('/api/superadmin/aziende', async (req, res) => {
             return res.json({ success: false, message: "Inserisci il nome dell'attività." });
         }
 
-        const esistente = await pool.query("SELECT id FROM aziende WHERE id = $1", [codiceNum]);
+        await client.query('BEGIN');
+
+        const esistente = await client.query("SELECT id FROM aziende WHERE id = $1", [codiceNum]);
         if (esistente.rows.length > 0) {
+            await client.query('ROLLBACK');
             return res.json({ success: false, message: `Il codice #${codiceNum} è già assegnato a un'altra attività!` });
         }
 
@@ -598,23 +823,27 @@ app.post('/api/superadmin/aziende', async (req, res) => {
         const emojiPulita = (emoji_business && emoji_business.trim()) ? emoji_business.trim() : '🏢';
         const passTitolare = (password_titolare && password_titolare.trim()) ? password_titolare.trim() : 'admin123';
 
-        await pool.query("INSERT INTO aziende (id, nome_locale) VALUES ($1, $2)", [codiceNum, nomePulito]);
-        await pool.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
+        await client.query("INSERT INTO aziende (id, nome_locale) VALUES ($1, $2)", [codiceNum, nomePulito]);
+        await client.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
 
-        await pool.query(
+        await client.query(
             "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ($1, $2, $3)",
             [nomePulito, emojiPulita, codiceNum]
         );
 
-        await pool.query(
+        await client.query(
             "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ('Titolare', 'manager', 'Tutti', $1, $2)",
-            [passTitolare, codiceNum]
+            [hashPassword(passTitolare), codiceNum]
         );
 
+        await client.query('COMMIT');
         res.json({ success: true });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error("Errore creazione azienda:", err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -667,18 +896,24 @@ app.put('/api/superadmin/aziende/:id/codice', async (req, res) => {
 });
 
 app.delete('/api/superadmin/aziende/:id', async (req, res) => {
+    const client = await pool.connect();
     try {
         const idNum = parseInt(req.params.id, 10);
-        await pool.query("DELETE FROM push_subscriptions WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM turni WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM veicoli WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM reparti WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM utenti WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM impostazioni WHERE azienda_id = $1", [idNum]);
-        await pool.query("DELETE FROM aziende WHERE id = $1", [idNum]);
+        await client.query('BEGIN');
+        await client.query("DELETE FROM push_subscriptions WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM turni WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM veicoli WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM reparti WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM utenti WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM impostazioni WHERE azienda_id = $1", [idNum]);
+        await client.query("DELETE FROM aziende WHERE id = $1", [idNum]);
+        await client.query('COMMIT');
         res.json({ success: true });
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -717,7 +952,7 @@ app.get('/api/impostazioni', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/impostazioni', async (req, res) => {
+app.put('/api/impostazioni', requireManager, async (req, res) => {
     try {
         const { nome_business, emoji_business } = req.body;
         await pool.query(
@@ -740,7 +975,7 @@ app.get('/api/reparti', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/reparti', async (req, res) => {
+app.post('/api/reparti', requireManager, async (req, res) => {
     try {
         const nomePulito = (req.body.nome || '').trim();
         await pool.query(
@@ -751,7 +986,7 @@ app.post('/api/reparti', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/reparti/:id/veicolo', async (req, res) => {
+app.put('/api/reparti/:id/veicolo', requireManager, async (req, res) => {
     try {
         await pool.query(
             "UPDATE reparti SET richiede_veicolo = $1 WHERE id = $2 AND azienda_id = $3",
@@ -761,7 +996,7 @@ app.put('/api/reparti/:id/veicolo', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/reparti/:id', async (req, res) => {
+app.delete('/api/reparti/:id', requireManager, async (req, res) => {
     try {
         await pool.query("DELETE FROM reparti WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
@@ -776,7 +1011,7 @@ app.get('/api/utenti', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/utenti', async (req, res) => {
+app.post('/api/utenti', requireManager, async (req, res) => {
     try {
         const { nome, ruolo, reparto, reparti, password } = req.body;
         let repartoFinale = '';
@@ -785,15 +1020,16 @@ app.post('/api/utenti', async (req, res) => {
         } else {
             repartoFinale = (reparto || '').trim();
         }
+        const ruoloSafe = ruolo === 'manager' ? 'manager' : 'staff';
         await pool.query(
             "INSERT INTO utenti (nome, ruolo, reparto, password, azienda_id) VALUES ($1, $2, $3, $4, $5)", 
-            [(nome || '').trim(), ruolo, repartoFinale, password, req.azienda_id]
+            [(nome || '').trim(), ruoloSafe, repartoFinale, hashPassword(password), req.azienda_id]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/utenti/:id/reparti', async (req, res) => {
+app.put('/api/utenti/:id/reparti', requireManager, async (req, res) => {
     try {
         const { reparti, reparto } = req.body;
         let repartoFinale = '';
@@ -810,7 +1046,7 @@ app.put('/api/utenti/:id/reparti', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/utenti/:id', async (req, res) => {
+app.delete('/api/utenti/:id', requireManager, async (req, res) => {
     try {
         await pool.query("DELETE FROM push_subscriptions WHERE utente_id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         await pool.query("DELETE FROM utenti WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
@@ -826,7 +1062,7 @@ app.get('/api/veicoli', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/veicoli', async (req, res) => {
+app.post('/api/veicoli', requireManager, async (req, res) => {
     try {
         await pool.query(
             "INSERT INTO veicoli (nome, tipo, azienda_id) VALUES ($1, $2, $3)", 
@@ -836,7 +1072,7 @@ app.post('/api/veicoli', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/veicoli/:id', async (req, res) => {
+app.delete('/api/veicoli/:id', requireManager, async (req, res) => {
     try {
         await pool.query("DELETE FROM veicoli WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
         res.json({ success: true });
@@ -863,15 +1099,32 @@ app.get('/api/turni', async (req, res) => {
 app.post('/api/turni', async (req, res) => {
     try {
         let { giorno, orario, utente_id, reparto, veicolo_id, ricorrenza, stato, forza_riposo } = req.body;
+
+        // Lo staff può inserire solo proposte o assenze per se stesso
+        if (req.user.ruolo === 'staff') {
+            if (Number(utente_id) !== Number(req.user.id)) {
+                return res.status(403).json({ success: false, message: "Puoi inserire richieste solo per il tuo profilo." });
+            }
+            if (!['proposta', 'indisponibile'].includes(stato)) {
+                return res.status(403).json({ success: false, message: "Operazione non consentita." });
+            }
+            veicolo_id = null;
+        }
         
-        let numSettimane = parseInt(ricorrenza, 10) || 1;
+        let numSettimane = Math.min(Math.max(parseInt(ricorrenza, 10) || 1, 1), 12);
         let idVeicoloSafe = veicolo_id ? parseInt(veicolo_id, 10) : null;
 
-        const uRes = await pool.query("SELECT nome, reparto FROM utenti WHERE id = $1", [utente_id]);
-        const nomeDip = uRes.rows.length > 0 ? uRes.rows[0].nome : 'Dipendente';
+        const uRes = await pool.query(
+            "SELECT nome, reparto FROM utenti WHERE id = $1 AND azienda_id = $2",
+            [utente_id, req.azienda_id]
+        );
+        if (uRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Utente non trovato in questa attività." });
+        }
+        const nomeDip = uRes.rows[0].nome;
         let repartoFinale = (reparto || '').trim();
         if (!repartoFinale && stato !== 'indisponibile') {
-            const compitiUtente = uRes.rows.length > 0 ? parseCompitiList(uRes.rows[0].reparto) : [];
+            const compitiUtente = parseCompitiList(uRes.rows[0].reparto);
             repartoFinale = compitiUtente[0] || null;
         }
 
@@ -900,11 +1153,21 @@ app.post('/api/turni', async (req, res) => {
             }
         }
 
-        for (const cand of candidati) {
-            await pool.query(
-                "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
-                [cand.giorno, cand.orario, cand.utente_id, cand.reparto, cand.veicolo_id, stato, req.azienda_id]
-            );
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const cand of candidati) {
+                await client.query(
+                    "INSERT INTO turni (giorno, orario, utente_id, reparto, veicolo_id, stato, azienda_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", 
+                    [cand.giorno, cand.orario, cand.utente_id, cand.reparto, cand.veicolo_id, stato, req.azienda_id]
+                );
+            }
+            await client.query('COMMIT');
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            throw dbErr;
+        } finally {
+            client.release();
         }
 
         // Notifiche push mirate in base al tipo di inserimento
@@ -943,6 +1206,15 @@ app.delete('/api/turni/:id', async (req, res) => {
             [req.params.id, req.azienda_id]
         );
         const t = turnoRes.rows[0];
+        if (!t) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+
+        const isManagerOrSA = req.user.ruolo === 'manager' || req.user.ruolo === 'superadmin';
+        const isProprietario = Number(t.utente_id) === Number(req.user.id);
+        if (!isManagerOrSA && !(isProprietario && ['proposta', 'indisponibile'].includes(t.stato))) {
+            return res.status(403).json({ success: false, message: "Non hai i permessi per eliminare questo turno." });
+        }
 
         await pool.query("DELETE FROM turni WHERE id = $1 AND azienda_id = $2", [req.params.id, req.azienda_id]);
 
@@ -970,7 +1242,7 @@ app.delete('/api/turni/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id', async (req, res) => {
+app.put('/api/turni/:id', requireManager, async (req, res) => {
     try {
         const { giorno, orario, utente_id, reparto, veicolo_id, forza_riposo } = req.body;
         const check = await verificaConflittiTurni(
@@ -1002,7 +1274,7 @@ app.put('/api/turni/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id/orario', async (req, res) => {
+app.put('/api/turni/:id/orario', requireManager, async (req, res) => {
     try {
         const turnoRes = await pool.query(
             "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
@@ -1042,7 +1314,7 @@ app.put('/api/turni/:id/orario', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id/conferma', async (req, res) => {
+app.put('/api/turni/:id/conferma', requireManager, async (req, res) => {
     try {
         const turnoRes = await pool.query(
             "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
@@ -1079,7 +1351,7 @@ app.put('/api/turni/:id/conferma', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id/stato', async (req, res) => {
+app.put('/api/turni/:id/stato', requireManager, async (req, res) => {
     try {
         await pool.query("UPDATE turni SET stato = $1 WHERE id = $2 AND azienda_id = $3", [req.body.stato, req.params.id, req.azienda_id]);
         res.json({ success: true });
@@ -1101,6 +1373,11 @@ app.put('/api/turni/:id/richiedi-scambio', async (req, res) => {
         }
         const t = turnoRes.rows[0];
 
+        const isManagerOrSA = req.user.ruolo === 'manager' || req.user.ruolo === 'superadmin';
+        if (!isManagerOrSA && Number(t.utente_id) !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Puoi proporre lo scambio solo per i tuoi turni." });
+        }
+
         await pool.query(
             "UPDATE turni SET stato = 'scambio', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2",
             [req.params.id, req.azienda_id]
@@ -1121,6 +1398,18 @@ app.put('/api/turni/:id/richiedi-scambio', async (req, res) => {
 
 app.put('/api/turni/:id/annulla-scambio', async (req, res) => {
     try {
+        const turnoRes = await pool.query(
+            "SELECT utente_id FROM turni WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+        const isManagerOrSA = req.user.ruolo === 'manager' || req.user.ruolo === 'superadmin';
+        if (!isManagerOrSA && Number(turnoRes.rows[0].utente_id) !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Non autorizzato ad annullare questo scambio." });
+        }
+
         await pool.query(
             "UPDATE turni SET stato = 'confermato', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2",
             [req.params.id, req.azienda_id]
@@ -1134,6 +1423,9 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
         const sostitutoId = parseInt(req.body.sostituto_id, 10);
         if (!sostitutoId) {
             return res.status(400).json({ success: false, message: "Utente non valido." });
+        }
+        if (req.user.ruolo === 'staff' && sostitutoId !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Non autorizzato." });
         }
 
         const turnoRes = await pool.query(
@@ -1208,6 +1500,18 @@ app.put('/api/turni/:id/accetta-scambio', async (req, res) => {
 
 app.put('/api/turni/:id/ritira-scambio', async (req, res) => {
     try {
+        const turnoRes = await pool.query(
+            "SELECT sostituto_id FROM turni WHERE id = $1 AND azienda_id = $2",
+            [req.params.id, req.azienda_id]
+        );
+        if (turnoRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Turno non trovato." });
+        }
+        const isManagerOrSA = req.user.ruolo === 'manager' || req.user.ruolo === 'superadmin';
+        if (!isManagerOrSA && Number(turnoRes.rows[0].sostituto_id) !== Number(req.user.id)) {
+            return res.status(403).json({ success: false, message: "Non autorizzato a ritirare questa disponibilità." });
+        }
+
         await pool.query(
             "UPDATE turni SET stato = 'scambio', sostituto_id = NULL WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
             [req.params.id, req.azienda_id]
@@ -1216,7 +1520,7 @@ app.put('/api/turni/:id/ritira-scambio', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id/approva-scambio', async (req, res) => {
+app.put('/api/turni/:id/approva-scambio', requireManager, async (req, res) => {
     try {
         const turnoRes = await pool.query(
             "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2 AND stato = 'scambio_proposto'",
@@ -1263,7 +1567,7 @@ app.put('/api/turni/:id/approva-scambio', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/turni/:id/rifiuta-scambio', async (req, res) => {
+app.put('/api/turni/:id/rifiuta-scambio', requireManager, async (req, res) => {
     try {
         const turnoRes = await pool.query(
             "SELECT * FROM turni WHERE id = $1 AND azienda_id = $2",
@@ -1300,7 +1604,7 @@ app.put('/api/turni/:id/rifiuta-scambio', async (req, res) => {
 });
 
 // --- STATISTICHE MENSILI CON ORE ORDINARIE / NOTTURNE / FESTIVE ---
-app.get('/api/statistiche/mensili', async (req, res) => {
+app.get('/api/statistiche/mensili', requireManager, async (req, res) => {
     try {
         const mese = req.query.mese;
         if (!mese) return res.json({ mese: '', riepilogo: [], dettaglio_turni: [] });
@@ -1382,7 +1686,25 @@ app.get('/api/statistiche/mensili', async (req, res) => {
     }
 });
 
-// AVVIO SERVER
-app.listen(PORT, () => {
-    console.log(`Server avviato sulla porta ${PORT}`);
-});
+// AVVIO SERVER SINCRONIZZATO CON IL DATABASE
+async function avviaServer() {
+    try {
+        await pool.query("SELECT NOW()");
+        console.log("🚀 Connesso con successo a PostgreSQL su Neon!");
+        await creaTabelle();
+    } catch (err) {
+        console.error("Errore iniziale connessione/setup PostgreSQL:", err);
+    }
+
+    const server = app.listen(PORT, () => {
+        console.log(`Server avviato sulla porta ${PORT}`);
+    });
+
+    process.on('SIGTERM', () => {
+        server.close(() => {
+            pool.end().catch(() => {});
+        });
+    });
+}
+
+avviaServer();
