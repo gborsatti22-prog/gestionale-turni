@@ -115,7 +115,7 @@
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-900">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                     <h3 class="text-xl font-bold flex items-center gap-2">👑 Assegna un Nuovo Turno</h3>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">🛡️ Controllo conflitti, mezzi & riposo 11h CCNL attivo</span>
+                    <span id="badge-ccnl-attivo" class="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">🛡️ Controllo conflitti, mezzi & riposo 11h CCNL attivo</span>
                 </div>
                 <form id="form-turno" class="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
                     <input type="date" id="giorno" required class="border p-2 rounded-lg w-full md:w-auto outline-none focus:ring-2 focus:ring-blue-500">
@@ -142,12 +142,12 @@
                 </form>
             </div>
 
-            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE/NOTTURNE/FESTIVE ED EXPORT EXCEL/PDF -->
+            <!-- SCHEDA 2: RESOCONTO MENSILE TURNI CON ORE ORDINARIE/NOTTURNE/DOMENICALI/FESTIVE ED EXPORT EXCEL/PDF -->
             <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                 <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">📊 Report Mensile Ore & Export Consulente</h3>
-                        <p class="text-xs text-gray-500 mt-0.5">Suddivisione automatica: <strong>Ordinarie</strong>, <strong>Notturne</strong> (22:00–06:00) e <strong>Festive / Domenicali</strong>.</p>
+                        <p id="sottotitolo-report-ccnl" class="text-xs text-gray-500 mt-0.5">CCNL Pubblici Esercizi / Ristorazione (FIPE) • Fascia notturna: <strong>24:00–06:00</strong> | Domenicali separate da Festive.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                         <label class="text-xs font-bold text-gray-500 uppercase">Mese:</label>
@@ -168,8 +168,9 @@
                                 <th class="p-3">Compiti</th>
                                 <th class="p-3 text-center">Turni</th>
                                 <th class="p-3 text-right">Ordinarie</th>
-                                <th class="p-3 text-right text-indigo-700">Notturne</th>
-                                <th class="p-3 text-right text-amber-700">Festive/Dom.</th>
+                                <th id="th-ore-notturne" class="p-3 text-right text-indigo-700">Notturne</th>
+                                <th class="p-3 text-right text-sky-700">Domenicali</th>
+                                <th class="p-3 text-right text-amber-700">Festive</th>
                                 <th class="p-3 text-right text-purple-700">Nott. Festive</th>
                                 <th class="p-3 text-right font-bold text-gray-900">Totale Ore</th>
                             </tr>
@@ -179,14 +180,36 @@
                 </div>
             </div>
 
-            <!-- SCHEDA 3 & 4: PROFILO & REPARTI/COMPITI -->
+            <!-- SCHEDA 3 & 4: PROFILO (CON SELETTORE CCNL + SANTO PATRONO) & REPARTI/COMPITI -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-emerald-600">
-                    <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività</h3>
+                    <h3 class="text-xl font-bold mb-4">⚙️ Profilo Attività & CCNL</h3>
                     <form id="form-impostazioni" class="space-y-3">
-                        <input type="text" id="set-nome-business" required class="w-full border p-2 rounded-lg outline-none" placeholder="Nome Attività">
-                        <input type="text" id="set-emoji-business" required class="w-full border p-2 rounded-lg outline-none" placeholder="Emoji">
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg w-full">Salva Impostazioni</button>
+                        <div class="flex gap-2">
+                            <input type="text" id="set-nome-business" required class="flex-1 border p-2 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Nome Attività">
+                            <input type="text" id="set-emoji-business" required class="w-20 text-center border p-2 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Emoji">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Contratto Collettivo Applicato (CCNL)</label>
+                            <select id="set-ccnl" onchange="aggiornaAnteprimaCcnlForm()" class="w-full border p-2 rounded-lg bg-emerald-50/60 border-emerald-300 font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="fipe">CCNL Pubblici Esercizi / Ristorazione (FIPE)</option>
+                                <option value="commercio">CCNL Terziario / Commercio (Confcommercio)</option>
+                                <option value="logistica">CCNL Logistica / Trasporti / Rider</option>
+                                <option value="custom_24">Personalizzato (Notturno 24:00 - 06:00)</option>
+                                <option value="custom_22">Personalizzato (Notturno 22:00 - 06:00)</option>
+                            </select>
+                            <p id="anteprima-regole-ccnl" class="text-[11px] text-emerald-800 mt-1 font-medium">
+                                Notturno: 24:00–06:00 • Domenicali separate da Festive • Riposo min: 11h
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Festa Santo Patrono Comune (Opzionale, GG/MM)</label>
+                            <input type="text" id="set-santo-patrono" maxlength="5" placeholder="es. 25/04 (calcolato come festivo)" class="w-full border p-2 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                        </div>
+
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 transition text-white font-bold py-2 px-4 rounded-lg w-full shadow-sm">Salva Impostazioni</button>
                     </form>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-amber-500">
@@ -320,12 +343,73 @@
         let turniGlobal = [];
         let vistaAttuale = 'lista';
         let utenteInModificaCompitiId = null;
-        let ultimeStatisticheMensili = { mese: '', riepilogo: [], dettaglio_turni: [] };
+        let ccnlAttivoInfo = {
+            codice: 'fipe',
+            nome: 'CCNL Pubblici Esercizi / Ristorazione (FIPE)',
+            fasciaNotturna: '24:00 - 06:00',
+            riposoMinimoOre: 11,
+            santo_patrono: ''
+        };
+        let ultimeStatisticheMensili = { mese: '', ccnl_info: ccnlAttivoInfo, riepilogo: [], dettaglio_turni: [] };
+
+        const CCNL_DESCRIZIONI = {
+            fipe: {
+                nome: 'CCNL Pubblici Esercizi / Ristorazione (FIPE)',
+                fascia: '24:00 - 06:00',
+                riposo: 11
+            },
+            commercio: {
+                nome: 'CCNL Terziario / Commercio (Confcommercio)',
+                fascia: '22:00 - 06:00',
+                riposo: 11
+            },
+            logistica: {
+                nome: 'CCNL Logistica / Trasporti / Rider',
+                fascia: '22:00 - 06:00',
+                riposo: 11
+            },
+            custom_24: {
+                nome: 'Personalizzato (Notturno 24:00 - 06:00)',
+                fascia: '24:00 - 06:00',
+                riposo: 11
+            },
+            custom_22: {
+                nome: 'Personalizzato (Notturno 22:00 - 06:00)',
+                fascia: '22:00 - 06:00',
+                riposo: 11
+            }
+        };
 
         const oggi = new Date();
         const meseCorrenteStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('selettore-mese-stats').value = meseCorrenteStr;
         document.getElementById('mese-calendario').value = meseCorrenteStr;
+
+        window.aggiornaAnteprimaCcnlForm = function() {
+            const code = document.getElementById('set-ccnl').value || 'fipe';
+            const info = CCNL_DESCRIZIONI[code] || CCNL_DESCRIZIONI.fipe;
+            const el = document.getElementById('anteprima-regole-ccnl');
+            if (el) {
+                el.textContent = `Notturno: ${info.fascia} • Domenicali separate da Festive • Riposo min: ${info.riposo}h`;
+            }
+        };
+
+        function aggiornaEtichetteCcnlUI(info) {
+            if (!info) return;
+            ccnlAttivoInfo = info;
+            const fascia = info.fasciaNotturna || info.fascia_notturna || '24:00 - 06:00';
+            const nomeCcnl = info.nome || 'CCNL Pubblici Esercizi / Ristorazione (FIPE)';
+            const sp = info.santo_patrono ? ` • Santo Patrono: ${info.santo_patrono}` : '';
+
+            const sub = document.getElementById('sottotitolo-report-ccnl');
+            if (sub) {
+                sub.innerHTML = `<strong>${nomeCcnl}</strong> • Fascia notturna: <strong>${fascia}</strong> | Domenicali separate da Festive${sp}.`;
+            }
+            const thNott = document.getElementById('th-ore-notturne');
+            if (thNott) {
+                thNott.textContent = `Notturne (${fascia.replace(/\s+/g, '')})`;
+            }
+        }
 
         // Registrazione preventiva silenziosa del Service Worker
         if ('serviceWorker' in navigator) {
@@ -919,6 +1003,15 @@
                 document.getElementById('page-title').textContent = titolo;
                 document.getElementById('set-nome-business').value = data.nome_business || '';
                 document.getElementById('set-emoji-business').value = data.emoji_business || '';
+                document.getElementById('set-ccnl').value = data.ccnl || 'fipe';
+                document.getElementById('set-santo-patrono').value = data.santo_patrono || '';
+                aggiornaAnteprimaCcnlForm();
+
+                const info = {
+                    ...(data.ccnl_info || CCNL_DESCRIZIONI[data.ccnl] || CCNL_DESCRIZIONI.fipe),
+                    santo_patrono: data.santo_patrono || ''
+                };
+                aggiornaEtichetteCcnlUI(info);
             });
         }
 
@@ -1101,8 +1194,12 @@
                 .then(res => res.json())
                 .then(data => {
                     const stats = Array.isArray(data) ? data : (data.riepilogo || []);
+                    if (data.ccnl_info) {
+                        aggiornaEtichetteCcnlUI(data.ccnl_info);
+                    }
                     ultimeStatisticheMensili = {
                         mese,
+                        ccnl_info: data.ccnl_info || ccnlAttivoInfo,
                         riepilogo: stats,
                         dettaglio_turni: Array.isArray(data.dettaglio_turni) ? data.dettaglio_turni : []
                     };
@@ -1110,12 +1207,13 @@
                     const tbody = document.getElementById('tabella-statistiche');
                     tbody.innerHTML = '';
                     if (stats.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-gray-500">Nessun dipendente registrato per questo locale.</td></tr>`;
                         return;
                     }
                     stats.forEach(s => {
                         const ord = Number(s.ore_ordinarie || 0).toFixed(2);
                         const nott = Number(s.ore_notturne || 0).toFixed(2);
+                        const dom = Number(s.ore_domenicali || 0).toFixed(2);
                         const fest = Number(s.ore_festive || 0).toFixed(2);
                         const nottFest = Number(s.ore_notturne_festive || 0).toFixed(2);
                         const tot = Number(s.totale_ore || 0).toFixed(2);
@@ -1127,6 +1225,7 @@
                                 <td class="p-3 text-center"><b>${s.totale_turni}</b></td>
                                 <td class="p-3 text-right">${ord} h</td>
                                 <td class="p-3 text-right text-indigo-700 font-semibold">${nott} h</td>
+                                <td class="p-3 text-right text-sky-700 font-semibold">${dom} h</td>
                                 <td class="p-3 text-right text-amber-700 font-semibold">${fest} h</td>
                                 <td class="p-3 text-right text-purple-700 font-semibold">${nottFest} h</td>
                                 <td class="p-3 text-right text-gray-900 font-extrabold">${tot} h</td>
@@ -1145,6 +1244,10 @@
             const stats = ultimeStatisticheMensili.riepilogo || [];
             const dettaglio = ultimeStatisticheMensili.dettaglio_turni || [];
             const mese = ultimeStatisticheMensili.mese || document.getElementById('selettore-mese-stats').value;
+            const infoCcnl = ultimeStatisticheMensili.ccnl_info || ccnlAttivoInfo;
+            const fasciaNott = infoCcnl.fasciaNotturna || infoCcnl.fascia_notturna || '24:00 - 06:00';
+            const nomeCcnl = infoCcnl.nome || 'CCNL Pubblici Esercizi / Ristorazione (FIPE)';
+            const spText = infoCcnl.santo_patrono ? ` | Santo Patrono: ${infoCcnl.santo_patrono}` : '';
 
             if (stats.length === 0) {
                 return alert("Nessun dato disponibile da esportare per il mese selezionato.");
@@ -1155,16 +1258,17 @@
             // Foglio 1: Riepilogo Mensile
             const righeRiepilogo = [
                 [`PROSPETTO ORE LAVORATE - ${nomeAttivitaCorrente.toUpperCase()}`],
-                [`Mese di riferimento: ${mese}`, '', 'Fascia notturna: 22:00 - 06:00 | Festive: Domeniche e festività nazionali'],
+                [`Mese di riferimento: ${mese} | ${nomeCcnl}`, '', `Fascia notturna: ${fasciaNott} | Festive: Festività nazionali${spText}`],
                 [],
-                ['Dipendente', 'Compiti / Reparti', 'Totale Turni', 'Ore Ordinarie', 'Ore Notturne', 'Ore Festive/Dom.', 'Ore Nott. Festive', 'Totale Ore']
+                ['Dipendente', 'Compiti / Reparti', 'Totale Turni', 'Ore Ordinarie', `Ore Notturne (${fasciaNott})`, 'Ore Domenicali', 'Ore Festive', 'Ore Nott. Festive', 'Totale Ore']
             ];
 
-            let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
+            let totTurni = 0, totOrd = 0, totNott = 0, totDom = 0, totFest = 0, totNottFest = 0, totOre = 0;
 
             stats.forEach(s => {
                 const ord = Number(s.ore_ordinarie || 0);
                 const nott = Number(s.ore_notturne || 0);
+                const dom = Number(s.ore_domenicali || 0);
                 const fest = Number(s.ore_festive || 0);
                 const nottFest = Number(s.ore_notturne_festive || 0);
                 const tot = Number(s.totale_ore || 0);
@@ -1172,6 +1276,7 @@
                 totTurni += Number(s.totale_turni || 0);
                 totOrd += ord;
                 totNott += nott;
+                totDom += dom;
                 totFest += fest;
                 totNottFest += nottFest;
                 totOre += tot;
@@ -1182,6 +1287,7 @@
                     Number(s.totale_turni || 0),
                     Number(ord.toFixed(2)),
                     Number(nott.toFixed(2)),
+                    Number(dom.toFixed(2)),
                     Number(fest.toFixed(2)),
                     Number(nottFest.toFixed(2)),
                     Number(tot.toFixed(2))
@@ -1194,6 +1300,7 @@
                 totTurni,
                 Number(totOrd.toFixed(2)),
                 Number(totNott.toFixed(2)),
+                Number(totDom.toFixed(2)),
                 Number(totFest.toFixed(2)),
                 Number(totNottFest.toFixed(2)),
                 Number(totOre.toFixed(2))
@@ -1201,15 +1308,15 @@
 
             const wsRiepilogo = XLSX.utils.aoa_to_sheet(righeRiepilogo);
             wsRiepilogo['!cols'] = [
-                { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 14 }
+                { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 15 }, { wch: 22 }, { wch: 16 }, { wch: 15 }, { wch: 18 }, { wch: 14 }
             ];
             XLSX.utils.book_append_sheet(wb, wsRiepilogo, 'Riepilogo Mensile');
 
             // Foglio 2: Dettaglio Giornaliero Turni
             const righeDettaglio = [
-                [`DETTAGLIO TURNI DEL MESE (${mese}) - ${nomeAttivitaCorrente.toUpperCase()}`],
+                [`DETTAGLIO TURNI DEL MESE (${mese}) - ${nomeAttivitaCorrente.toUpperCase()} (${nomeCcnl})`],
                 [],
-                ['Data', 'Dipendente', 'Reparto / Compito', 'Orario', 'Mezzo', 'Ordinarie (h)', 'Notturne (h)', 'Festive (h)', 'Nott. Festive (h)', 'Totale (h)']
+                ['Data', 'Dipendente', 'Reparto / Compito', 'Orario', 'Mezzo', 'Ordinarie (h)', 'Notturne (h)', 'Domenicali (h)', 'Festive (h)', 'Nott. Festive (h)', 'Totale (h)']
             ];
 
             dettaglio.forEach(d => {
@@ -1221,6 +1328,7 @@
                     d.mezzo,
                     Number(Number(d.ore_ordinarie || 0).toFixed(2)),
                     Number(Number(d.ore_notturne || 0).toFixed(2)),
+                    Number(Number(d.ore_domenicali || 0).toFixed(2)),
                     Number(Number(d.ore_festive || 0).toFixed(2)),
                     Number(Number(d.ore_notturne_festive || 0).toFixed(2)),
                     Number(Number(d.totale_ore || 0).toFixed(2))
@@ -1229,7 +1337,7 @@
 
             const wsDettaglio = XLSX.utils.aoa_to_sheet(righeDettaglio);
             wsDettaglio['!cols'] = [
-                { wch: 13 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 13 }
+                { wch: 13 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 15 }, { wch: 14 }, { wch: 16 }, { wch: 13 }
             ];
             XLSX.utils.book_append_sheet(wb, wsDettaglio, 'Dettaglio Turni');
 
@@ -1245,6 +1353,10 @@
             const stats = ultimeStatisticheMensili.riepilogo || [];
             const dettaglio = ultimeStatisticheMensili.dettaglio_turni || [];
             const mese = ultimeStatisticheMensili.mese || document.getElementById('selettore-mese-stats').value;
+            const infoCcnl = ultimeStatisticheMensili.ccnl_info || ccnlAttivoInfo;
+            const fasciaNott = infoCcnl.fasciaNotturna || infoCcnl.fascia_notturna || '24:00 - 06:00';
+            const nomeCcnl = infoCcnl.nome || 'CCNL Pubblici Esercizi / Ristorazione (FIPE)';
+            const spText = infoCcnl.santo_patrono ? ` | Santo Patrono: ${infoCcnl.santo_patrono}` : '';
 
             if (stats.length === 0) {
                 return alert("Nessun dato disponibile da esportare per il mese selezionato.");
@@ -1262,15 +1374,16 @@
             doc.setFont('helvetica', 'bold');
             doc.text(`${nomeAttivitaCorrente} — Prospetto Mensile Ore Lavorate`, 14, 12);
 
-            doc.setFontSize(10);
+            doc.setFontSize(9.5);
             doc.setFont('helvetica', 'normal');
-            doc.text(`Mese di riferimento: ${mese}   |   Documento per Consulente del Lavoro`, 14, 19);
+            doc.text(`Mese: ${mese}   |   ${nomeCcnl}   |   Documento per Consulente del Lavoro`, 14, 19);
 
             // Tabella Riepilogo
-            let totTurni = 0, totOrd = 0, totNott = 0, totFest = 0, totNottFest = 0, totOre = 0;
+            let totTurni = 0, totOrd = 0, totNott = 0, totDom = 0, totFest = 0, totNottFest = 0, totOre = 0;
             const bodyRiepilogo = stats.map(s => {
                 const ord = Number(s.ore_ordinarie || 0);
                 const nott = Number(s.ore_notturne || 0);
+                const dom = Number(s.ore_domenicali || 0);
                 const fest = Number(s.ore_festive || 0);
                 const nottFest = Number(s.ore_notturne_festive || 0);
                 const tot = Number(s.totale_ore || 0);
@@ -1278,6 +1391,7 @@
                 totTurni += Number(s.totale_turni || 0);
                 totOrd += ord;
                 totNott += nott;
+                totDom += dom;
                 totFest += fest;
                 totNottFest += nottFest;
                 totOre += tot;
@@ -1288,6 +1402,7 @@
                     String(s.totale_turni || 0),
                     `${ord.toFixed(2)} h`,
                     `${nott.toFixed(2)} h`,
+                    `${dom.toFixed(2)} h`,
                     `${fest.toFixed(2)} h`,
                     `${nottFest.toFixed(2)} h`,
                     `${tot.toFixed(2)} h`
@@ -1296,7 +1411,7 @@
 
             doc.autoTable({
                 startY: 32,
-                head: [['Dipendente', 'Compiti / Reparti', 'Turni', 'Ordinarie', 'Notturne (22-06)', 'Festive / Dom.', 'Nott. Festive', 'Totale Ore']],
+                head: [['Dipendente', 'Compiti / Reparti', 'Turni', 'Ordinarie', `Notturne (${fasciaNott})`, 'Domenicali', 'Festive', 'Nott. Festive', 'Totale Ore']],
                 body: bodyRiepilogo,
                 foot: [[
                     'TOTALE COMPLESSIVO',
@@ -1304,28 +1419,30 @@
                     String(totTurni),
                     `${totOrd.toFixed(2)} h`,
                     `${totNott.toFixed(2)} h`,
+                    `${totDom.toFixed(2)} h`,
                     `${totFest.toFixed(2)} h`,
                     `${totNottFest.toFixed(2)} h`,
                     `${totOre.toFixed(2)} h`
                 ]],
                 theme: 'grid',
-                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-                footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold', fontSize: 9 },
-                styles: { fontSize: 9, cellPadding: 3 },
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+                footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold', fontSize: 8.5 },
+                styles: { fontSize: 8.5, cellPadding: 2.8 },
                 columnStyles: {
                     2: { halign: 'center' },
                     3: { halign: 'right' },
                     4: { halign: 'right' },
                     5: { halign: 'right' },
                     6: { halign: 'right' },
-                    7: { halign: 'right', fontStyle: 'bold' }
+                    7: { halign: 'right' },
+                    8: { halign: 'right', fontStyle: 'bold' }
                 }
             });
 
             const afterTableY = doc.lastAutoTable.finalY + 8;
             doc.setTextColor(90, 90, 90);
             doc.setFontSize(8.5);
-            doc.text('Criteri di calcolo: Ore Notturne = fascia 22:00 - 06:00 | Ore Festive = Domeniche e festività nazionali italiane.', 14, afterTableY);
+            doc.text(`Criteri (${nomeCcnl}): Ore Notturne = fascia ${fasciaNott} | Ore Domenicali separate da Ore Festive (festività nazionali${spText}).`, 14, afterTableY);
 
             // Spazio firma
             const oggiFormat = new Date().toLocaleDateString('it-IT');
@@ -1352,6 +1469,7 @@
                     d.mezzo,
                     `${Number(d.ore_ordinarie || 0).toFixed(2)} h`,
                     `${Number(d.ore_notturne || 0).toFixed(2)} h`,
+                    `${Number(d.ore_domenicali || 0).toFixed(2)} h`,
                     `${Number(d.ore_festive || 0).toFixed(2)} h`,
                     `${Number(d.ore_notturne_festive || 0).toFixed(2)} h`,
                     `${Number(d.totale_ore || 0).toFixed(2)} h`
@@ -1359,17 +1477,18 @@
 
                 doc.autoTable({
                     startY: 26,
-                    head: [['Data', 'Dipendente', 'Reparto', 'Orario', 'Mezzo', 'Ordinarie', 'Notturne', 'Festive', 'Nott. Fest.', 'Totale']],
+                    head: [['Data', 'Dipendente', 'Reparto', 'Orario', 'Mezzo', 'Ordinarie', 'Notturne', 'Domenic.', 'Festive', 'Nott. Fest.', 'Totale']],
                     body: bodyDettaglio,
                     theme: 'striped',
-                    headStyles: { fillColor: [55, 65, 81], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-                    styles: { fontSize: 8.5, cellPadding: 2.5 },
+                    headStyles: { fillColor: [55, 65, 81], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+                    styles: { fontSize: 8, cellPadding: 2.3 },
                     columnStyles: {
                         5: { halign: 'right' },
                         6: { halign: 'right' },
                         7: { halign: 'right' },
                         8: { halign: 'right' },
-                        9: { halign: 'right', fontStyle: 'bold' }
+                        9: { halign: 'right' },
+                        10: { halign: 'right', fontStyle: 'bold' }
                     }
                 });
             }
@@ -1379,7 +1498,27 @@
         };
 
         // --- SALVATAGGIO DATI ---
-        document.getElementById('form-impostazioni').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome_business: document.getElementById('set-nome-business').value, emoji_business: document.getElementById('set-emoji-business').value }) }).then(() => caricaImpostazioni()); });
+        document.getElementById('form-impostazioni').addEventListener('submit', e => {
+            e.preventDefault();
+            apiFetch('/api/impostazioni', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nome_business: document.getElementById('set-nome-business').value,
+                    emoji_business: document.getElementById('set-emoji-business').value,
+                    ccnl: document.getElementById('set-ccnl').value,
+                    santo_patrono: document.getElementById('set-santo-patrono').value
+                })
+            })
+            .then(res => res.json())
+            .then(() => caricaImpostazioni())
+            .then(() => {
+                if (utenteLoggato?.ruolo === 'manager') {
+                    caricaStatisticheMensili();
+                }
+            });
+        });
+
         document.getElementById('form-nuovo-reparto').addEventListener('submit', e => { e.preventDefault(); apiFetch('/api/reparti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: document.getElementById('nuovo-reparto-nome').value, richiede_veicolo: document.getElementById('nuovo-reparto-veicolo').checked }) }).then(() => { caricaReparti().then(() => caricaUtenti()); e.target.reset(); }); });
         
         document.getElementById('form-nuovo-utente').addEventListener('submit', e => { 
