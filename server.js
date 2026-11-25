@@ -27,6 +27,60 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     console.warn("⚠️ Chiavi VAPID non configurate: imposta VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY su Render.");
 }
 
+// --- PRESET CCNL SUPPORTATI ---
+const CCNL_PRESETS = {
+    fipe: {
+        codice: 'fipe',
+        nome: 'CCNL Pubblici Esercizi / Ristorazione (FIPE)',
+        notturnoStartHour: 0, // 24:00 - 06:00
+        fasciaNotturna: '24:00 - 06:00',
+        riposoMinimoOre: 11
+    },
+    commercio: {
+        codice: 'commercio',
+        nome: 'CCNL Terziario / Commercio (Confcommercio)',
+        notturnoStartHour: 22, // 22:00 - 06:00
+        fasciaNotturna: '22:00 - 06:00',
+        riposoMinimoOre: 11
+    },
+    logistica: {
+        codice: 'logistica',
+        nome: 'CCNL Logistica / Trasporti / Rider',
+        notturnoStartHour: 22, // 22:00 - 06:00
+        fasciaNotturna: '22:00 - 06:00',
+        riposoMinimoOre: 11
+    },
+    custom_24: {
+        codice: 'custom_24',
+        nome: 'Personalizzato (Notturno 24:00 - 06:00)',
+        notturnoStartHour: 0,
+        fasciaNotturna: '24:00 - 06:00',
+        riposoMinimoOre: 11
+    },
+    custom_22: {
+        codice: 'custom_22',
+        nome: 'Personalizzato (Notturno 22:00 - 06:00)',
+        notturnoStartHour: 22,
+        fasciaNotturna: '22:00 - 06:00',
+        riposoMinimoOre: 11
+    }
+};
+
+function getCcnlConfig(codiceCcnl) {
+    const key = String(codiceCcnl || 'fipe').trim().toLowerCase();
+    return CCNL_PRESETS[key] || CCNL_PRESETS.fipe;
+}
+
+function normalizzaSantoPatrono(valore) {
+    if (!valore) return '';
+    const match = String(valore).trim().match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if (!match) return '';
+    const gg = parseInt(match[1], 10);
+    const mm = parseInt(match[2], 10);
+    if (gg < 1 || gg > 31 || mm < 1 || mm > 12) return '';
+    return `${String(gg).padStart(2, '0')}/${String(mm).padStart(2, '0')}`;
+}
+
 // --- SICUREZZA PASSWORD (SCRYPT + COMPATIBILITÀ ACCOUNT ESISTENTI) ---
 function hashPassword(plainPassword) {
     const salt = crypto.randomBytes(16).toString('hex');
@@ -151,7 +205,14 @@ const pool = new Pool({
 async function creaTabelle() {
     const queries = `
         CREATE TABLE IF NOT EXISTS aziende (id SERIAL PRIMARY KEY, nome_locale TEXT);
-        CREATE TABLE IF NOT EXISTS impostazioni (id SERIAL PRIMARY KEY, nome_business TEXT, emoji_business TEXT, azienda_id INTEGER);
+        CREATE TABLE IF NOT EXISTS impostazioni (
+            id SERIAL PRIMARY KEY,
+            nome_business TEXT,
+            emoji_business TEXT,
+            ccnl TEXT DEFAULT 'fipe',
+            santo_patrono TEXT DEFAULT '',
+            azienda_id INTEGER
+        );
         CREATE TABLE IF NOT EXISTS reparti (id SERIAL PRIMARY KEY, nome TEXT, richiede_veicolo BOOLEAN, azienda_id INTEGER);
         CREATE TABLE IF NOT EXISTS utenti (id SERIAL PRIMARY KEY, nome TEXT, ruolo TEXT, reparto TEXT, password TEXT, azienda_id INTEGER);
         CREATE TABLE IF NOT EXISTS veicoli (id SERIAL PRIMARY KEY, nome TEXT, tipo TEXT, azienda_id INTEGER);
@@ -174,6 +235,9 @@ async function creaTabelle() {
             p256dh TEXT NOT NULL,
             auth TEXT NOT NULL
         );
+
+        ALTER TABLE impostazioni ADD COLUMN IF NOT EXISTS ccnl TEXT DEFAULT 'fipe';
+        ALTER TABLE impostazioni ADD COLUMN IF NOT EXISTS santo_patrono TEXT DEFAULT '';
 
         CREATE INDEX IF NOT EXISTS idx_impostazioni_azienda ON impostazioni(azienda_id);
         CREATE INDEX IF NOT EXISTS idx_reparti_azienda ON reparti(azienda_id);
@@ -201,7 +265,7 @@ async function controllaDatiIniziali() {
             [hashPassword('admin123')]
         );
         await pool.query(
-            "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ('Gestionale Turni', '🍔🛵', 1)"
+            "INSERT INTO impostazioni (nome_business, emoji_business, ccnl, santo_patrono, azienda_id) VALUES ('Gestionale Turni', '🍔🛵', 'fipe', '', 1)"
         );
         console.log("Dati iniziali inseriti.");
     }
@@ -320,7 +384,7 @@ function spostaGiornoStr(giornoStr, deltaGiorni) {
     return d.toISOString().split('T')[0];
 }
 
-// --- HELPER FESTIVITÀ ITALIANE & CALCOLO ORE ORDINARIE / NOTTURNE / FESTIVE ---
+// --- HELPER FESTIVITÀ ITALIANE, SANTO PATRONO & CALCOLO ORE PER CCNL ---
 function calcolaPasquaUTC(anno) {
     const a = anno % 19;
     const b = Math.floor(anno / 100);
@@ -339,38 +403,57 @@ function calcolaPasquaUTC(anno) {
     return new Date(Date.UTC(anno, mese - 1, giorno));
 }
 
-function isGiornoFestivoItalia(giornoStr) {
+function getTipoGiornoItalia(giornoStr, santoPatronoGGMM = '') {
     const [anno, mese, day] = giornoStr.split('-').map(Number);
     const dataUTC = new Date(Date.UTC(anno, mese - 1, day));
-
-    if (dataUTC.getUTCDay() === 0) return true;
-
     const mmdd = `${String(mese).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
     const festiviFissi = [
         '01-01', '01-06', '04-25', '05-01', '06-02',
         '08-15', '11-01', '12-08', '12-25', '12-26'
     ];
-    if (festiviFissi.includes(mmdd)) return true;
+    if (festiviFissi.includes(mmdd)) {
+        return { isFestivo: true, isDomenica: false };
+    }
+
+    // Santo Patrono (formato GG/MM -> confrontato con MM-DD)
+    if (santoPatronoGGMM && santoPatronoGGMM.includes('/')) {
+        const [spGG, spMM] = santoPatronoGGMM.split('/');
+        if (spGG && spMM && mmdd === `${spMM.padStart(2, '0')}-${spGG.padStart(2, '0')}`) {
+            return { isFestivo: true, isDomenica: false };
+        }
+    }
 
     const pasqua = calcolaPasquaUTC(anno);
     const pasquetta = new Date(pasqua.getTime() + 24 * 60 * 60 * 1000);
-    return giornoStr === pasqua.toISOString().split('T')[0] || giornoStr === pasquetta.toISOString().split('T')[0];
+    if (giornoStr === pasqua.toISOString().split('T')[0] || giornoStr === pasquetta.toISOString().split('T')[0]) {
+        return { isFestivo: true, isDomenica: false };
+    }
+
+    return {
+        isFestivo: false,
+        isDomenica: dataUTC.getUTCDay() === 0
+    };
 }
 
-function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
+function calcolaDettaglioOreTurno(giornoStr, orarioStr, ccnlConfig = CCNL_PRESETS.fipe, santoPatronoGGMM = '') {
     const intervallo = parseIntervalloMinuti(giornoStr, orarioStr);
     if (!intervallo) {
         return {
             ore_ordinarie: 0,
             ore_notturne: 0,
+            ore_domenicali: 0,
             ore_festive: 0,
             ore_notturne_festive: 0,
             totale_ore: 0
         };
     }
 
+    const startNightMin = (ccnlConfig.notturnoStartHour === 0) ? 0 : (ccnlConfig.notturnoStartHour * 60);
+
     let minOrdinarie = 0;
     let minNotturne = 0;
+    let minDomenicali = 0;
     let minFestive = 0;
     let minNotturneFestive = 0;
 
@@ -379,13 +462,22 @@ function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
         const mod = m % 1440;
         const dataCorrente = dayOffset === 0 ? giornoStr : spostaGiornoStr(giornoStr, dayOffset);
 
-        const isNotturno = (mod >= 22 * 60 || mod < 6 * 60);
-        const isFestivo = isGiornoFestivoItalia(dataCorrente);
+        const isNotturno = startNightMin === 0
+            ? (mod < 6 * 60) // 24:00 - 06:00
+            : (mod >= startNightMin || mod < 6 * 60); // 22:00 - 06:00
 
-        if (!isNotturno && !isFestivo) minOrdinarie++;
-        else if (isNotturno && !isFestivo) minNotturne++;
-        else if (!isNotturno && isFestivo) minFestive++;
-        else minNotturneFestive++;
+        const { isFestivo, isDomenica } = getTipoGiornoItalia(dataCorrente, santoPatronoGGMM);
+
+        if (isFestivo) {
+            if (isNotturno) minNotturneFestive++;
+            else minFestive++;
+        } else if (isDomenica) {
+            if (isNotturno) minNotturne++;
+            else minDomenicali++;
+        } else {
+            if (isNotturno) minNotturne++;
+            else minOrdinarie++;
+        }
     }
 
     const round2 = (n) => Math.round((n / 60) * 100) / 100;
@@ -393,6 +485,7 @@ function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
     return {
         ore_ordinarie: round2(minOrdinarie),
         ore_notturne: round2(minNotturne),
+        ore_domenicali: round2(minDomenicali),
         ore_festive: round2(minFestive),
         ore_notturne_festive: round2(minNotturneFestive),
         totale_ore: round2(intervallo.minFine - intervallo.minInizio)
@@ -402,6 +495,10 @@ function calcolaDettaglioOreTurno(giornoStr, orarioStr) {
 async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = null) {
     const statiAttivi = ['confermato', 'assegnato', 'scambio', 'scambio_proposto'];
     const warningsRiposo = [];
+
+    const impRes = await pool.query("SELECT ccnl FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [aziendaId]);
+    const ccnlConfig = getCcnlConfig(impRes.rows[0]?.ccnl);
+    const riposoMinimoMinuti = (ccnlConfig.riposoMinimoOre || 11) * 60;
 
     const utentiRes = await pool.query("SELECT id, nome FROM utenti WHERE azienda_id = $1", [aziendaId]);
     const mappaUtenti = {};
@@ -465,10 +562,10 @@ async function verificaConflittiTurni(aziendaId, candidati, excludeTurnoId = nul
                         gapMinuti = intervalloEs.startEpochMin - intervalloCand.endEpochMin;
                     }
 
-                    if (gapMinuti !== null && gapMinuti < 660) {
+                    if (gapMinuti !== null && gapMinuti < riposoMinimoMinuti) {
                         const oreRiposo = (gapMinuti / 60).toFixed(1);
                         warningsRiposo.push(
-                            `• ${cand.giorno} (${cand.orario}): per ${nomeDip} passano solo ${oreRiposo} ore di riposo rispetto al turno del ${es.giorno} (${es.orario}) — minimo consigliato CCNL: 11 ore.`
+                            `• ${cand.giorno} (${cand.orario}): per ${nomeDip} passano solo ${oreRiposo} ore di riposo rispetto al turno del ${es.giorno} (${es.orario}) — minimo consigliato ${ccnlConfig.nome}: ${ccnlConfig.riposoMinimoOre} ore.`
                         );
                     }
                 } else if (es.giorno === cand.giorno) {
@@ -684,7 +781,7 @@ app.get('/api/verifica-azienda/:codice', checkRateLimit, async (req, res) => {
         const result = await pool.query("SELECT id, nome_locale FROM aziende WHERE id = $1", [codiceNum]);
         if (result.rows.length > 0) {
             const impRes = await pool.query(
-                "SELECT nome_business, emoji_business FROM impostazioni WHERE azienda_id = $1 LIMIT 1",
+                "SELECT nome_business, emoji_business, ccnl, santo_patrono FROM impostazioni WHERE azienda_id = $1 LIMIT 1",
                 [codiceNum]
             );
             const utentiRes = await pool.query(
@@ -827,7 +924,7 @@ app.post('/api/superadmin/aziende', async (req, res) => {
         await client.query("SELECT setval(pg_get_serial_sequence('aziende', 'id'), COALESCE((SELECT MAX(id) FROM aziende), 1), true)");
 
         await client.query(
-            "INSERT INTO impostazioni (nome_business, emoji_business, azienda_id) VALUES ($1, $2, $3)",
+            "INSERT INTO impostazioni (nome_business, emoji_business, ccnl, santo_patrono, azienda_id) VALUES ($1, $2, 'fipe', '', $3)",
             [nomePulito, emojiPulita, codiceNum]
         );
 
@@ -948,22 +1045,41 @@ app.post('/api/superadmin/accedi-azienda/:id', async (req, res) => {
 app.get('/api/impostazioni', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [req.azienda_id]);
-        res.json(result.rows[0] || {});
+        const row = result.rows[0] || {};
+        const ccnlConfig = getCcnlConfig(row.ccnl);
+        res.json({
+            ...row,
+            ccnl: ccnlConfig.codice,
+            ccnl_info: ccnlConfig,
+            santo_patrono: row.santo_patrono || ''
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/impostazioni', requireManager, async (req, res) => {
     try {
-        const { nome_business, emoji_business } = req.body;
-        await pool.query(
-            "UPDATE impostazioni SET nome_business = $1, emoji_business = $2 WHERE azienda_id = $3", 
-            [nome_business, emoji_business, req.azienda_id]
-        );
+        const { nome_business, emoji_business, ccnl, santo_patrono } = req.body;
+        const ccnlConfig = getCcnlConfig(ccnl);
+        const santoPatronoPulito = normalizzaSantoPatrono(santo_patrono);
+
+        const existing = await pool.query("SELECT id FROM impostazioni WHERE azienda_id = $1 LIMIT 1", [req.azienda_id]);
+        if (existing.rows.length > 0) {
+            await pool.query(
+                "UPDATE impostazioni SET nome_business = $1, emoji_business = $2, ccnl = $3, santo_patrono = $4 WHERE azienda_id = $5", 
+                [nome_business, emoji_business, ccnlConfig.codice, santoPatronoPulito, req.azienda_id]
+            );
+        } else {
+            await pool.query(
+                "INSERT INTO impostazioni (nome_business, emoji_business, ccnl, santo_patrono, azienda_id) VALUES ($1, $2, $3, $4, $5)",
+                [nome_business, emoji_business, ccnlConfig.codice, santoPatronoPulito, req.azienda_id]
+            );
+        }
+
         await pool.query(
             "UPDATE aziende SET nome_locale = $1 WHERE id = $2",
             [nome_business, req.azienda_id]
         );
-        res.json({ success: true });
+        res.json({ success: true, ccnl: ccnlConfig.codice, santo_patrono: santoPatronoPulito });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1603,11 +1719,18 @@ app.put('/api/turni/:id/rifiuta-scambio', requireManager, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- STATISTICHE MENSILI CON ORE ORDINARIE / NOTTURNE / FESTIVE ---
+// --- STATISTICHE MENSILI CON ORE ORDINARIE / NOTTURNE / DOMENICALI / FESTIVE ---
 app.get('/api/statistiche/mensili', requireManager, async (req, res) => {
     try {
         const mese = req.query.mese;
         if (!mese) return res.json({ mese: '', riepilogo: [], dettaglio_turni: [] });
+
+        const impRes = await pool.query(
+            "SELECT ccnl, santo_patrono FROM impostazioni WHERE azienda_id = $1 LIMIT 1",
+            [Number(req.azienda_id)]
+        );
+        const ccnlConfig = getCcnlConfig(impRes.rows[0]?.ccnl);
+        const santoPatrono = normalizzaSantoPatrono(impRes.rows[0]?.santo_patrono);
 
         const query = `
             SELECT 
@@ -1643,16 +1766,18 @@ app.get('/api/statistiche/mensili', requireManager, async (req, res) => {
                     totale_turni: 0,
                     ore_ordinarie: 0,
                     ore_notturne: 0,
+                    ore_domenicali: 0,
                     ore_festive: 0,
                     ore_notturne_festive: 0,
                     totale_ore: 0
                 };
             }
             if (row.orario && row.giorno) {
-                const dett = calcolaDettaglioOreTurno(row.giorno, row.orario);
+                const dett = calcolaDettaglioOreTurno(row.giorno, row.orario, ccnlConfig, santoPatrono);
                 statistiche[row.id].totale_turni += 1;
                 statistiche[row.id].ore_ordinarie = round2(statistiche[row.id].ore_ordinarie + dett.ore_ordinarie);
                 statistiche[row.id].ore_notturne = round2(statistiche[row.id].ore_notturne + dett.ore_notturne);
+                statistiche[row.id].ore_domenicali = round2(statistiche[row.id].ore_domenicali + dett.ore_domenicali);
                 statistiche[row.id].ore_festive = round2(statistiche[row.id].ore_festive + dett.ore_festive);
                 statistiche[row.id].ore_notturne_festive = round2(statistiche[row.id].ore_notturne_festive + dett.ore_notturne_festive);
                 statistiche[row.id].totale_ore = round2(statistiche[row.id].totale_ore + dett.totale_ore);
@@ -1665,6 +1790,7 @@ app.get('/api/statistiche/mensili', requireManager, async (req, res) => {
                     mezzo: row.nome_veicolo || '-',
                     ore_ordinarie: dett.ore_ordinarie,
                     ore_notturne: dett.ore_notturne,
+                    ore_domenicali: dett.ore_domenicali,
                     ore_festive: dett.ore_festive,
                     ore_notturne_festive: dett.ore_notturne_festive,
                     totale_ore: dett.totale_ore
@@ -1677,6 +1803,10 @@ app.get('/api/statistiche/mensili', requireManager, async (req, res) => {
 
         res.json({
             mese,
+            ccnl_info: {
+                ...ccnlConfig,
+                santo_patrono: santoPatrono
+            },
             riepilogo: statsArray,
             dettaglio_turni: dettaglioTurni
         });
