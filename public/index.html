@@ -308,6 +308,7 @@
     <script>
         let utenteLoggato = null; 
         let aziendaCorrenteId = null; 
+        let authToken = null;
         let superadminToken = null;
         let listaAziendeSA = {};
         let nomeAttivitaCorrente = 'Gestionale Turni';
@@ -393,6 +394,9 @@
             if (!options.headers) options.headers = {};
             if (aziendaCorrenteId !== null && aziendaCorrenteId !== undefined) {
                 options.headers['x-azienda-id'] = aziendaCorrenteId;
+            }
+            if (authToken) {
+                options.headers['Authorization'] = `Bearer ${authToken}`;
             }
             if (superadminToken) {
                 options.headers['x-superadmin-token'] = superadminToken;
@@ -627,15 +631,22 @@
                         document.getElementById('blocco-utente').classList.remove('hidden');
                         document.getElementById('blocco-utente').classList.add('flex');
 
+                        const loginSelect = document.getElementById('login-select');
+
                         if (data.isSuperAdmin) {
                             document.getElementById('header-business').innerHTML = `Console Super Admin 👑`;
-                            const loginSelect = document.getElementById('login-select');
                             loginSelect.innerHTML = `<option value="superadmin">👑 Super Admin</option>`;
                         } else {
-                            nomeAttivitaCorrente = data.azienda.nome_locale;
-                            document.getElementById('header-business').innerHTML = `${data.azienda.nome_locale} 🍔🛵`;
-                            caricaImpostazioni();
-                            caricaReparti().then(() => caricaUtenti());
+                            nomeAttivitaCorrente = (data.impostazioni && data.impostazioni.nome_business) || data.azienda.nome_locale;
+                            const emoji = (data.impostazioni && data.impostazioni.emoji_business) || '🍔🛵';
+                            const titolo = `${nomeAttivitaCorrente} ${emoji}`;
+                            document.getElementById('header-business').textContent = titolo;
+                            document.getElementById('page-title').textContent = titolo;
+
+                            loginSelect.innerHTML = '<option value="">-- Chi sei? --</option>';
+                            (data.utenti || []).forEach(u => {
+                                loginSelect.innerHTML += `<option value="${u.id}">${u.nome}</option>`;
+                            });
                         }
                     } else {
                         alert(data.message);
@@ -647,6 +658,7 @@
         window.cambiaAttivita = function() {
             utenteLoggato = null;
             aziendaCorrenteId = null;
+            authToken = null;
             superadminToken = null;
             notificheAttivePerUtente = false;
             turniGlobal = [];
@@ -682,6 +694,9 @@
             .then(res => res.json()).then(data => {
                 if (data.success) {
                     utenteLoggato = data.utente;
+                    if (data.authToken) {
+                        authToken = data.authToken;
+                    }
                     if (data.superadminToken) {
                         superadminToken = data.superadminToken;
                     }
@@ -698,8 +713,10 @@
                     if (utenteLoggato.ruolo === 'superadmin') {
                         mostraPannelloSuperAdmin();
                     } else if (utenteLoggato.ruolo === 'manager') {
+                        caricaImpostazioni();
                         attivaVistaAzienda('manager');
                     } else {
+                        caricaImpostazioni();
                         attivaVistaAzienda('staff');
                     }
                 } else alert(data.message);
@@ -1538,9 +1555,25 @@
         function renderLista(turniFiltrati) {
             const lista = document.getElementById('lista-turni');
             lista.innerHTML = ''; 
-            if(turniFiltrati.length === 0) return lista.innerHTML = `<div class="text-center text-gray-500 py-6">Nessun turno trovato.</div>`;
 
-            turniFiltrati.forEach(turno => {
+            // La vista Lista mostra i turni da oggi fino all'ultimo giorno del mese corrente
+            const adesso = new Date();
+            const annoOggi = adesso.getFullYear();
+            const meseOggi = String(adesso.getMonth() + 1).padStart(2, '0');
+            const giornoOggi = String(adesso.getDate()).padStart(2, '0');
+            const oggiLocalStr = `${annoOggi}-${meseOggi}-${giornoOggi}`;
+            const meseLocalStr = `${annoOggi}-${meseOggi}`;
+
+            const turniLista = turniFiltrati.filter(turno => {
+                if (!turno.giorno) return false;
+                return turno.giorno.startsWith(meseLocalStr) && turno.giorno >= oggiLocalStr;
+            });
+
+            if (turniLista.length === 0) {
+                return lista.innerHTML = `<div class="text-center text-gray-500 py-8 bg-gray-50 rounded-xl border border-dashed">Nessun turno in programma da oggi fino a fine mese.</div>`;
+            }
+
+            turniLista.forEach(turno => {
                 const div = document.createElement('div');
                 let html = '';
                 const isProprietario = Number(turno.utente_id) === Number(utenteLoggato.id);
